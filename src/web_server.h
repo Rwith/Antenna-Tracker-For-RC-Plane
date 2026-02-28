@@ -44,6 +44,7 @@ static const char _DASH_HTML[] PROGMEM = R"rawhtml(<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Antenna Tracker</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
 :root{--bg:#0f1117;--card:#1a1d27;--border:#2a2d3a;--text:#e0e2ec;
       --dim:#8b8fa8;--green:#4ade80;--red:#f87171;--blue:#60a5fa;}
@@ -66,6 +67,11 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;
      margin-right:4px;background:currentColor}
 .rose{display:flex;justify-content:center;margin-bottom:11px}
+.map-card{grid-column:1/-1}
+#map{height:340px;border-radius:6px;overflow:hidden}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#1a1d27;color:#e0e2ec;border:1px solid #2a2d3a}
+.leaflet-control-attribution{background:rgba(26,29,39,.8)!important;color:#8b8fa8!important}
+.leaflet-control-attribution a{color:#60a5fa!important}
 </style>
 </head>
 <body>
@@ -126,7 +132,13 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
     <div class="row"><span class="lbl">Altitude</span>  <span class="val" id="pAlt">--</span></div>
   </div>
 
+  <div class="card map-card">
+    <div class="ct">Live Map &nbsp;&#x25CF; <span class="ok">green</span> = tracker &nbsp;&#x25CF; <span class="info">blue</span> = plane</div>
+    <div id="map"></div>
+  </div>
+
 </div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 const deg=v=>v.toFixed(1)+'&#xB0;';
 const mt =v=>v.toFixed(0)+' m';
@@ -136,6 +148,21 @@ function arrow(id,a,len){
   el.setAttribute('x2',(Math.cos(r)*len).toFixed(1));
   el.setAttribute('y2',(Math.sin(r)*len).toFixed(1));
 }
+// ── Map ────────────────────────────────────────────────────────────────────
+const map=L.map('map').setView([20,0],2);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',{
+  attribution:'&copy; <a href="https://openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  maxZoom:19
+}).addTo(map);
+function mkIcon(c){
+  return L.divIcon({
+    html:'<div style="width:13px;height:13px;border-radius:50%;background:'+c+';border:2px solid rgba(255,255,255,.4)"></div>',
+    iconSize:[13,13],iconAnchor:[6,6],className:''
+  });
+}
+let hM=null,pM=null,tL=null,autoFit=true;
+map.on('dragstart zoomstart',()=>{autoFit=false;});
+// ──────────────────────────────────────────────────────────────────────────
 async function poll(){
   try{
     const d=await fetch('/data').then(r=>r.json());
@@ -162,6 +189,24 @@ async function poll(){
     document.getElementById('pLat').textContent=d.planeLat.toFixed(7);
     document.getElementById('pLon').textContent=d.planeLon.toFixed(7);
     document.getElementById('pAlt').textContent=d.planeAlt.toFixed(1)+' m';
+    // ── Map markers ──────────────────────────────────────────────────────────
+    if(d.homeValid){
+      if(!hM){hM=L.marker([d.homeLat,d.homeLon],{icon:mkIcon('#4ade80')})
+        .bindPopup('<b>Tracker</b><br>'+d.homeAlt.toFixed(1)+' m MSL').addTo(map);}
+      else hM.setLatLng([d.homeLat,d.homeLon]);
+    }
+    if(d.planeValid){
+      const pc='<b>Plane</b><br>'+d.planeAlt.toFixed(1)+' m MSL';
+      if(!pM){pM=L.marker([d.planeLat,d.planeLon],{icon:mkIcon('#60a5fa')})
+        .bindPopup(pc).addTo(map);}
+      else{pM.setLatLng([d.planeLat,d.planeLon]);pM.getPopup().setContent(pc);}
+    }
+    if(d.homeValid&&d.planeValid){
+      const pts=[[d.homeLat,d.homeLon],[d.planeLat,d.planeLon]];
+      if(!tL){tL=L.polyline(pts,{color:'#60a5fa',weight:1.5,dashArray:'6 4',opacity:.65}).addTo(map);}
+      else tL.setLatLngs(pts);
+      if(autoFit)map.fitBounds(pts,{padding:[40,40],maxZoom:16});
+    }else if(d.homeValid&&autoFit){map.setView([d.homeLat,d.homeLon],14);}
   }catch(e){
     document.getElementById('ts').textContent='&#x26A0; No response \u2013 retrying\u2026';
   }
