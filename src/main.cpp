@@ -100,9 +100,10 @@ void loop() {
                 if (now - lastLog >= 1000u) {
                     lastLog = now;
                     Serial.printf("[TRACK] dist=%.0fm  bearing=%.1f°  elev=%.1f°  "
-                                  "pan=%.1f°\n",
+                                  "pan=%.1f°  tilt=%.1f°\n",
                                   dist, bearing, elevation,
-                                  compass.getHeading());
+                                  compass.getHeading(),
+                                  tracker.getTiltAngle());
                 }
 
             } else {

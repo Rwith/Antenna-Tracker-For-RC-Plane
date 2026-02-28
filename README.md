@@ -108,7 +108,7 @@ Expected output once running:
 [OK]    Servos attached.
 [INFO]  Waiting for home GPS fix (need ≥4 satellites)...
 [HOME]  GPS locked: 51.5074000, -0.1278000  alt=12.3 m  sats=8
-[TRACK] dist=342m  bearing=247.3°  elev=8.1°  pan=246.8°
+[TRACK] dist=342m  bearing=247.3°  elev=8.1°  pan=246.8°  tilt=8.1°
 ```
 
 ---
