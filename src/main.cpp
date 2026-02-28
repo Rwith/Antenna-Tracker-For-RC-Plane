@@ -8,16 +8,18 @@
 #include "compass.h"
 #include "tracker_math.h"
 #include "servo_controller.h"
+#include "web_server.h"
 
 // ─── Hardware serial ports ────────────────────────────────────────────────────
 HardwareSerial gpsSerial(1);   // UART1 → NEO-6M GPS
 HardwareSerial elrsSerial(2);  // UART2 → BetaFPV ELRS 915 MHz backpack (CRSF)
 
 // ─── Component instances ──────────────────────────────────────────────────────
-TinyGPSPlus  gps;
-CRSFParser   crsfParser(elrsSerial);
+TinyGPSPlus     gps;
+CRSFParser      crsfParser(elrsSerial);
 Compass         compass;
 ServoController tracker;
+TrackerWebServer webServer;
 
 // ─── State ────────────────────────────────────────────────────────────────────
 PlaneGPS planePos = { 0, 0, 0, 0, false, 0 };
@@ -48,7 +50,10 @@ void setup() {
     tracker.begin();
     Serial.println("[OK]    Servos attached.");
 
-    Serial.println("[INFO]  Waiting for home GPS fix (need ≥4 satellites)...");
+    // WiFi + web dashboard
+    webServer.begin();
+
+    Serial.println("[INFO]  Waiting for home GPS fix (need >=4 satellites)...");
 }
 
 // ─── Main loop ────────────────────────────────────────────────────────────────
@@ -83,6 +88,9 @@ void loop() {
         bool homeGpsOk    = (gps.location.age() < GPS_TIMEOUT_MS);
         bool crsfOk       = (now - planePos.lastUpdate < CRSF_TIMEOUT_MS);
 
+        webServer.status.homeGpsOk = homeGpsOk;
+        webServer.status.crsfOk    = crsfOk;
+
         if (homeGpsOk && crsfOk) {
             double dist = haversineDistance(homePos.lat, homePos.lon,
                                             planePos.lat, planePos.lon);
@@ -94,6 +102,11 @@ void loop() {
                 float  elevation = calculateElevation(dist, altDiff);
 
                 tracker.setTarget(static_cast<float>(bearing), elevation);
+
+                webServer.status.tracking  = true;
+                webServer.status.bearing   = static_cast<float>(bearing);
+                webServer.status.elevation = elevation;
+                webServer.status.distM     = static_cast<float>(dist);
 
                 // Status log (once per second)
                 static uint32_t lastLog = 0;
@@ -109,11 +122,13 @@ void loop() {
             } else {
                 // Plane is too close – hold position to avoid spinning
                 tracker.stop();
+                webServer.status.tracking = false;
             }
 
         } else {
             // Stale data – stop servos for safety
             tracker.stop();
+            webServer.status.tracking = false;
 
             static uint32_t lastWarn = 0;
             if (millis() - lastWarn >= 2000u) {
@@ -126,10 +141,26 @@ void loop() {
     } else {
         // Not yet initialised – keep servos still
         tracker.stop();
+        webServer.status.tracking = false;
     }
 
     // ── 4. Run the servo controller ───────────────────────────────────────────
     // Pan: closed-loop P-controller using compass heading.
     // Tilt: open-loop – 180° servo moves directly to the commanded angle.
     tracker.update(compass.getHeading());
+
+    // ── 5. Update web dashboard status ───────────────────────────────────────
+    webServer.status.homeValid  = homePos.valid;
+    webServer.status.homeLat    = homePos.lat;
+    webServer.status.homeLon    = homePos.lon;
+    webServer.status.homeAlt    = homePos.alt;
+    webServer.status.homeSats   = static_cast<uint8_t>(gps.satellites.value());
+    webServer.status.planeValid = planePos.valid;
+    webServer.status.planeLat   = planePos.lat;
+    webServer.status.planeLon   = planePos.lon;
+    webServer.status.planeAlt   = planePos.alt;
+    webServer.status.panAngle   = compass.getHeading();
+    webServer.status.tiltAngle  = tracker.getTiltAngle();
+
+    webServer.handle();
 }

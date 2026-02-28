@@ -64,6 +64,14 @@
 #define MIN_PLANE_DISTANCE_M   5.0f   // ignore plane if closer than this (m)
                                       // prevents wild spinning when on the ground
 
+// ─── WiFi (web dashboard) ─────────────────────────────────────────────────────
+// The ESP32 hosts a live status page at http://<ip>/ once connected.
+// Set WIFI_SSID / WIFI_PASSWORD to your network credentials.
+// If the connection fails the tracker still operates normally.
+#define WIFI_SSID        "your-network-name"
+#define WIFI_PASSWORD    "your-password"
+#define WIFI_TIMEOUT_MS  15000   // ms to wait for association before giving up
+
 // ─── Compass (QMC5883L) Calibration ─────────────────────────────────────────
 // Run a compass calibration (rotate tracker 360°) to find hard-iron offsets.
 // Uncalibrated values will work but may have a few degrees of error.
