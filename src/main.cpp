@@ -1,0 +1,141 @@
+#include <Arduino.h>
+#include <Wire.h>
+#include <HardwareSerial.h>
+#include <TinyGPSPlus.h>
+
+#include "config.h"
+#include "mavlink_parser.h"
+#include "compass.h"
+#include "imu.h"
+#include "tracker_math.h"
+#include "servo_controller.h"
+
+// ─── Hardware serial ports ────────────────────────────────────────────────────
+HardwareSerial gpsSerial(1);  // UART1 → NEO-6M GPS
+HardwareSerial mavSerial(2);  // UART2 → MAVLink telemetry radio
+
+// ─── Component instances ──────────────────────────────────────────────────────
+TinyGPSPlus     gps;
+MAVLinkParser   mavParser(mavSerial);
+Compass         compass;
+IMU             imu;
+ServoController tracker;
+
+// ─── State ────────────────────────────────────────────────────────────────────
+PlaneGPS planePos = { 0, 0, 0, 0, false, 0 };
+HomeGPS  homePos  = { 0, 0, 0, false };
+
+// ─── Setup ────────────────────────────────────────────────────────────────────
+void setup() {
+    Serial.begin(115200);
+    Serial.println("\n[TRACKER] Antenna Tracker starting...");
+
+    // I2C bus
+    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+
+    // NEO-6M GPS
+    gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+
+    // MAVLink telemetry radio
+    mavSerial.begin(MAV_BAUD, SERIAL_8N1, MAV_RX_PIN, MAV_TX_PIN);
+
+    // Compass (pan feedback)
+    if (!compass.begin()) {
+        Serial.println("[ERROR] QMC5883L not found – check I2C wiring (SDA/SCL) and VCC.");
+        while (true) delay(1000);
+    }
+    Serial.println("[OK]    QMC5883L compass ready.");
+
+    // IMU (tilt feedback)
+    if (!imu.begin()) {
+        Serial.println("[ERROR] MPU6050 not found – check I2C wiring and AD0 pin.");
+        while (true) delay(1000);
+    }
+    Serial.println("[OK]    MPU6050 IMU ready.");
+
+    // Servos
+    tracker.begin();
+    Serial.println("[OK]    Servos attached.");
+
+    Serial.println("[INFO]  Waiting for home GPS fix (need ≥4 satellites)...");
+}
+
+// ─── Main loop ────────────────────────────────────────────────────────────────
+void loop() {
+
+    // ── 1. Feed NEO-6M NMEA data into TinyGPS++ ──────────────────────────────
+    while (gpsSerial.available()) {
+        gps.encode(static_cast<char>(gpsSerial.read()));
+    }
+
+    // Update home position whenever we have a valid GPS fix
+    if (gps.location.isValid() && gps.satellites.value() >= 4) {
+        bool firstFix = !homePos.valid;
+        homePos.lat   = gps.location.lat();
+        homePos.lon   = gps.location.lng();
+        homePos.alt   = gps.altitude.meters();
+        homePos.valid = true;
+
+        if (firstFix) {
+            Serial.printf("[HOME]  GPS locked: %.7f, %.7f  alt=%.1f m  sats=%u\n",
+                          homePos.lat, homePos.lon, homePos.alt,
+                          gps.satellites.value());
+        }
+    }
+
+    // ── 2. Feed MAVLink telemetry ─────────────────────────────────────────────
+    mavParser.update(planePos);
+
+    // ── 3. Compute target angles and drive servos ─────────────────────────────
+    if (homePos.valid && planePos.valid) {
+        uint32_t now      = millis();
+        bool homeGpsOk    = (gps.location.age() < GPS_TIMEOUT_MS);
+        bool mavLinkOk    = (now - planePos.lastUpdate < MAV_TIMEOUT_MS);
+
+        if (homeGpsOk && mavLinkOk) {
+            double dist = haversineDistance(homePos.lat, homePos.lon,
+                                            planePos.lat, planePos.lon);
+
+            if (dist >= MIN_PLANE_DISTANCE_M) {
+                double bearing   = calculateBearing(homePos.lat, homePos.lon,
+                                                    planePos.lat, planePos.lon);
+                float  altDiff   = planePos.alt - homePos.alt;
+                float  elevation = calculateElevation(dist, altDiff);
+
+                tracker.setTarget(static_cast<float>(bearing), elevation);
+
+                // Status log (once per second)
+                static uint32_t lastLog = 0;
+                if (now - lastLog >= 1000u) {
+                    lastLog = now;
+                    Serial.printf("[TRACK] dist=%.0fm  bearing=%.1f°  elev=%.1f°  "
+                                  "pan=%.1f°  tilt=%.1f°\n",
+                                  dist, bearing, elevation,
+                                  compass.getHeading(), imu.getElevation());
+                }
+
+            } else {
+                // Plane is too close – hold position to avoid spinning
+                tracker.stop();
+            }
+
+        } else {
+            // Stale data – stop servos for safety
+            tracker.stop();
+
+            static uint32_t lastWarn = 0;
+            if (millis() - lastWarn >= 2000u) {
+                lastWarn = millis();
+                if (!homeGpsOk)  Serial.println("[WARN]  Home GPS timeout – servos stopped.");
+                if (!mavLinkOk)  Serial.println("[WARN]  MAVLink timeout – servos stopped.");
+            }
+        }
+
+    } else {
+        // Not yet initialised – keep servos still
+        tracker.stop();
+    }
+
+    // ── 4. Run the servo P-controller ────────────────────────────────────────
+    tracker.update(compass.getHeading(), imu.getElevation());
+}
