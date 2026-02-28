@@ -1,6 +1,6 @@
 # Antenna Tracker for RC Planes
 
-An open-source ESP32 firmware that automatically points a directional antenna toward your RC plane using MAVLink GPS telemetry.  Two 360° continuous-rotation servos drive a pan/tilt mount in a closed-loop proportional controller.
+An open-source ESP32 firmware that automatically points a directional antenna toward your RC plane using CRSF GPS telemetry. A 360° continuous-rotation servo drives the pan axis in a closed-loop proportional controller, while a 180° positional servo drives the tilt axis directly to the calculated elevation angle.
 
 ---
 
@@ -12,23 +12,22 @@ An open-source ESP32 firmware that automatically points a directional antenna to
 │                                                                  │
 │  NEO-6M GPS ──▶ TinyGPS++ ──▶ Home position (lat/lon/alt)       │
 │                                       │                          │
-│  MAVLink radio ──▶ Parser ──▶ Plane position (lat/lon/alt)  ──▶  │
+│  ELRS backpack ──▶ CRSF parser ──▶ Plane position (lat/lon/alt) │
 │                                       │                          │
 │              haversine distance + bearing + elevation angle      │
 │                                       │                          │
 │  QMC5883L compass ──▶ current pan angle ──▶ pan P-controller    │
-│  MPU6050 IMU ──────▶ current tilt angle ──▶ tilt P-controller   │
 │                                       │                          │
-│                              PWM → 360° servos                   │
+│  Pan:  PWM → 360° continuous servo (closed-loop)                │
+│  Tilt: PWM → 180° positional servo   (open-loop, direct angle)  │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 1. The **NEO-6M GPS** gives the tracker's own position.
 2. The **BetaFPV ELRS 915 MHz backpack** receives CRSF `GPS` frames (frame type 0x02) from the plane's ELRS receiver at 420,000 baud.
 3. The firmware computes the required **bearing** (azimuth) and **elevation angle**.
-4. A **QMC5883L magnetometer** on the pan platform provides the current heading.
-5. An **MPU6050 IMU** on the tilt arm provides the current elevation angle.
-6. Two **proportional controllers** drive the 360° servos to minimise the error.
+4. A **QMC5883L magnetometer** on the pan platform provides the current heading for the pan P-controller.
+5. The **180° tilt servo** moves directly to the commanded elevation angle — no IMU or sensor required.
 
 ---
 
@@ -40,8 +39,8 @@ An open-source ESP32 firmware that automatically points a directional antenna to
 | NEO-6M GPS module | Ground station position |
 | BetaFPV ELRS 915 MHz backpack | CRSF GPS telemetry from plane |
 | QMC5883L magnetometer | Pan / azimuth feedback |
-| MPU6050 IMU | Tilt / elevation feedback |
-| 2 × 360° continuous-rotation servo | Pan axis + tilt axis |
+| 360° continuous-rotation servo | Pan axis |
+| 180° standard servo | Tilt axis (direct angle control) |
 | 5–6 V supply ≥ 2 A | Servo power |
 
 ---
@@ -77,8 +76,12 @@ Edit **`src/config.h`** to match your wiring:
 #define PAN_SERVO_PIN   25
 #define TILT_SERVO_PIN  26
 
-// Servo stop point (adjust if servos drift when stopped)
+// Pan servo stop point (adjust if servo drifts when stopped)
 #define SERVO_STOP  1500
+
+// 180° tilt servo endpoints – calibrate to your servo
+#define TILT_MIN_PWM  1000   // µs → antenna horizontal (0° elevation)
+#define TILT_MAX_PWM  2000   // µs → antenna at MAX_TILT_DEG elevation
 
 // Magnetic declination for your location
 // Find at https://www.magnetic-declination.com
@@ -102,11 +105,10 @@ Expected output once running:
 ```
 [TRACKER] Antenna Tracker starting...
 [OK]    QMC5883L compass ready.
-[OK]    MPU6050 IMU ready.
 [OK]    Servos attached.
 [INFO]  Waiting for home GPS fix (need ≥4 satellites)...
 [HOME]  GPS locked: 51.5074000, -0.1278000  alt=12.3 m  sats=8
-[TRACK] dist=342m  bearing=247.3°  elev=8.1°  pan=246.8°  tilt=7.9°
+[TRACK] dist=342m  bearing=247.3°  elev=8.1°  pan=246.8°
 ```
 
 ---
@@ -123,22 +125,30 @@ Quick summary:
 | 17 (TX1) | NEO-6M RX |
 | 18 (RX2) | ELRS backpack TX (CRSF) |
 | 19 (TX2) | ELRS backpack RX (optional) |
-| 21 (SDA) | QMC5883L SDA + MPU6050 SDA |
-| 22 (SCL) | QMC5883L SCL + MPU6050 SCL |
-| 25 | Pan servo signal |
-| 26 | Tilt servo signal |
+| 21 (SDA) | QMC5883L SDA |
+| 22 (SCL) | QMC5883L SCL |
+| 25 | Pan servo signal (360°) |
+| 26 | Tilt servo signal (180°) |
 
 ---
 
 ## Calibration
 
-### Servo stop point
+### Pan servo stop point
 
-Each 360° servo has a slightly different neutral pulse width.  If your servo drifts when it should be stopped:
+The 360° pan servo needs its neutral pulse width tuned so it stops cleanly. If the pan servo drifts when it should be stopped:
 
 1. Open serial monitor.
 2. Adjust `SERVO_STOP` in `config.h` in ±10 µs steps until drift stops.
 3. Typical range: 1480–1520 µs.
+
+### Tilt servo endpoints
+
+The 180° tilt servo is commanded via `TILT_MIN_PWM` and `TILT_MAX_PWM`:
+
+1. Set `TILT_MIN_PWM` so the antenna sits **horizontal** at 0° elevation.
+2. Set `TILT_MAX_PWM` so the antenna reaches `MAX_TILT_DEG` elevation.
+3. Typical values: 1000–2000 µs, but vary by servo brand.
 
 ### Compass hard-iron calibration
 
@@ -159,15 +169,13 @@ Look up your local declination at <https://www.magnetic-declination.com> and set
 
 ## Tuning the Controller
 
-All gains and deadbands are in `src/config.h`:
+Pan axis gains are in `src/config.h`. The tilt axis requires no tuning — the 180° servo positions itself.
 
 | Parameter | Default | Effect |
 |-----------|---------|--------|
 | `PAN_KP` | 4.0 | Increase → faster pan, may oscillate |
-| `TILT_KP` | 5.0 | Increase → faster tilt, may oscillate |
 | `PAN_DEADBAND` | 3.0° | Reduce → tighter tracking, more servo chatter |
-| `TILT_DEADBAND` | 2.0° | Same as above for tilt |
-| `MAX_SERVO_SPEED` | 350 µs | Caps maximum servo speed |
+| `MAX_SERVO_SPEED` | 350 µs | Caps maximum pan servo speed |
 
 ---
 
@@ -203,9 +211,8 @@ The CRSF GPS altitude field carries **metres MSL with a 1000 m offset** (`raw_ui
     ├── config.h            All pin/constant configuration (edit this)
     ├── crsf_parser.h       CRSF frame parser for ELRS backpack (GPS frame type 0x02)
     ├── compass.h           QMC5883L driver (pan feedback)
-    ├── imu.h               MPU6050 driver (tilt feedback)
     ├── tracker_math.h      Haversine distance, bearing, elevation calculations
-    └── servo_controller.h  Proportional controller → 360° servo PWM
+    └── servo_controller.h  Pan P-controller (360°) + tilt direct-angle writer (180°)
 ```
 
 ---

@@ -6,7 +6,6 @@
 #include "config.h"
 #include "crsf_parser.h"
 #include "compass.h"
-#include "imu.h"
 #include "tracker_math.h"
 #include "servo_controller.h"
 
@@ -18,7 +17,6 @@ HardwareSerial elrsSerial(2);  // UART2 → BetaFPV ELRS 915 MHz backpack (CRSF)
 TinyGPSPlus  gps;
 CRSFParser   crsfParser(elrsSerial);
 Compass         compass;
-IMU             imu;
 ServoController tracker;
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -30,7 +28,7 @@ void setup() {
     Serial.begin(115200);
     Serial.println("\n[TRACKER] Antenna Tracker starting...");
 
-    // I2C bus
+    // I2C bus (compass only)
     Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
 
     // NEO-6M GPS
@@ -45,13 +43,6 @@ void setup() {
         while (true) delay(1000);
     }
     Serial.println("[OK]    QMC5883L compass ready.");
-
-    // IMU (tilt feedback)
-    if (!imu.begin()) {
-        Serial.println("[ERROR] MPU6050 not found – check I2C wiring and AD0 pin.");
-        while (true) delay(1000);
-    }
-    Serial.println("[OK]    MPU6050 IMU ready.");
 
     // Servos
     tracker.begin();
@@ -109,9 +100,9 @@ void loop() {
                 if (now - lastLog >= 1000u) {
                     lastLog = now;
                     Serial.printf("[TRACK] dist=%.0fm  bearing=%.1f°  elev=%.1f°  "
-                                  "pan=%.1f°  tilt=%.1f°\n",
+                                  "pan=%.1f°\n",
                                   dist, bearing, elevation,
-                                  compass.getHeading(), imu.getElevation());
+                                  compass.getHeading());
                 }
 
             } else {
@@ -136,6 +127,8 @@ void loop() {
         tracker.stop();
     }
 
-    // ── 4. Run the servo P-controller ────────────────────────────────────────
-    tracker.update(compass.getHeading(), imu.getElevation());
+    // ── 4. Run the servo controller ───────────────────────────────────────────
+    // Pan: closed-loop P-controller using compass heading.
+    // Tilt: open-loop – 180° servo moves directly to the commanded angle.
+    tracker.update(compass.getHeading());
 }

@@ -8,8 +8,8 @@
 | 2 | NEO-6M GPS module | Ground-station position |
 | 3 | BetaFPV ELRS 915 MHz backpack | Receives CRSF GPS telemetry from plane |
 | 4 | QMC5883L magnetometer | Pan (azimuth) position feedback |
-| 5 | MPU6050 6-axis IMU | Tilt (elevation) position feedback |
-| 6 | 360° continuous servo × 2 | Pan axis + tilt axis |
+| 5 | 360° continuous servo | Pan axis |
+| 6 | 180° standard servo | Tilt axis (direct angle control – no sensor needed) |
 | 7 | 5–6 V regulated supply (≥ 2 A) | Servo power |
 
 ---
@@ -48,27 +48,23 @@ The backpack exposes a UART header (often labelled `T` / `R` or `TX` / `RX`).
 Connect the backpack's `TX` pin to ESP32 `GPIO 18`.  That is the only wire
 required for receive-only telemetry.
 
-### I2C – QMC5883L Compass + MPU6050 IMU (shared bus)
+### I2C – QMC5883L Compass
 
-Both sensors share the same two wires:
+| ESP32 GPIO | QMC5883L | Wire colour |
+|------------|----------|-------------|
+| GPIO 21 (SDA) | SDA | Blue |
+| GPIO 22 (SCL) | SCL | Yellow |
+| 3.3 V | VCC | Red |
+| GND | GND | Black |
 
-| ESP32 GPIO | QMC5883L | MPU6050 | Wire colour |
-|------------|----------|---------|-------------|
-| GPIO 21 (SDA) | SDA | SDA | Blue |
-| GPIO 22 (SCL) | SCL | SCL | Yellow |
-| 3.3 V | VCC | VCC | Red |
-| GND | GND | GND | Black |
-
-I2C addresses (fixed in hardware):
-- QMC5883L → **0x0D**
-- MPU6050   → **0x68** (AD0 pin tied LOW)
+I2C address (fixed in hardware): QMC5883L → **0x0D**
 
 ### Servo Signal Wires
 
 | ESP32 GPIO | Servo | Note |
 |------------|-------|------|
-| GPIO 25 | Pan servo (signal) | PWM 50 Hz |
-| GPIO 26 | Tilt servo (signal) | PWM 50 Hz |
+| GPIO 25 | Pan servo (signal) | 360° continuous, PWM 50 Hz |
+| GPIO 26 | Tilt servo (signal) | 180° positional, PWM 50 Hz |
 
 **Power the servos separately** from a 5–6 V supply capable of at least 1 A per servo.  Connect servo GND to ESP32 GND to share a common ground.
 
@@ -90,10 +86,10 @@ I2C addresses (fixed in hardware):
  ELRS Backpack───TX────▶│GPIO18       ┌──────────────────┘  │
               ◀──RX─────│GPIO19       │  I2C bus             │
               ────VCC───│3.3V/5V      │                      │
-              ────GND───│GND          ├─── QMC5883L (0x0D)  │
-                        │             └─── MPU6050  (0x68)  │
- Pan Servo ──signal─────│GPIO25                            │
- Tilt Servo ─signal─────│GPIO26                            │
+              ────GND───│GND          └─── QMC5883L (0x0D)  │
+                        │                                  │
+ Pan Servo ──signal─────│GPIO25  (360° continuous)         │
+ Tilt Servo ─signal─────│GPIO26  (180° positional)         │
                         └──────────────────────────────────┘
 
  Pan/Tilt servos: signal from ESP32, power from 5-6V external supply.
@@ -112,20 +108,15 @@ I2C addresses (fixed in hardware):
 - After assembly, calibrate: rotate tracker 360° and record X/Y min/max.
   Set `COMPASS_OFFSET_X = (Xmax + Xmin) / 2` and same for Y in `config.h`.
 
-### MPU6050 – Tilt platform
+### Tilt servo – 180° positional
 
-Mount on the **moving tilt arm** so it tilts with the antenna:
+The 180° tilt servo is commanded directly to the calculated elevation angle.
+No position sensor is required – the servo's internal pot handles positioning.
 
-```
- Antenna direction ──▶   ═══════[MPU6050]════════▶  antenna
-                                  X──▶  Z
-                                        ↑
-                          (Z points up when antenna is horizontal)
-```
+- **`TILT_MIN_PWM`** (default 1000 µs) = antenna horizontal (0° elevation)
+- **`TILT_MAX_PWM`** (default 2000 µs) = antenna at `MAX_TILT_DEG` elevation
 
-- **X axis** → forward along the antenna barrel
-- **Z axis** → upward when the antenna is horizontal (0° elevation)
-- If your elevation readings are inverted, try flipping the board 180° around the X axis.
+Adjust these two values in `config.h` to match your servo's actual endpoints.
 
 ---
 
@@ -136,8 +127,8 @@ Mount on the **moving tilt arm** so it tilts with the antenna:
 | ESP32 | ~240 mA peak |
 | NEO-6M GPS | ~45 mA |
 | QMC5883L | ~0.5 mA |
-| MPU6050 | ~4 mA |
-| Each 360° servo (stall) | ~700 mA |
+| 360° pan servo (stall) | ~700 mA |
+| 180° tilt servo (stall) | ~700 mA |
 | **Total (both servos active)** | **~1.7 A** |
 
 Use a 2 A or greater 5 V supply.  A 2S LiPo + 5 V BEC is a common field solution.
@@ -151,4 +142,5 @@ Use a 2 A or greater 5 V supply.  A 2S LiPo + 5 V BEC is a common field solution
 - [ ] I2C pull-up resistors (4.7 kΩ to 3.3 V on SDA and SCL) – many breakout boards include these
 - [ ] 100 µF capacitor across servo power rail to absorb current spikes
 - [ ] `config.h` reviewed: baud rates, pin numbers, `COMPASS_DECLINATION`
+- [ ] `TILT_MIN_PWM` / `TILT_MAX_PWM` verified against your servo's physical endpoints
 - [ ] Serial monitor open at 115200 baud to watch startup messages

@@ -35,17 +35,22 @@
 #define I2C_SDA_PIN  21
 #define I2C_SCL_PIN  22
 
-// ─── Proportional Controller Tuning ─────────────────────────────────────────
-// Increase gains if tracking is sluggish; decrease if servos oscillate.
+// ─── Pan Axis – 360° Continuous Servo P-Controller ───────────────────────────
+// Increase PAN_KP if tracking is sluggish; decrease if the pan oscillates.
 
 #define PAN_DEADBAND     3.0f   // degrees – pan stops when within this of target
-#define TILT_DEADBAND    2.0f   // degrees – tilt stops when within this of target
-
 #define PAN_KP           4.0f   // proportional gain for pan axis
-#define TILT_KP          5.0f   // proportional gain for tilt axis
 
-// Max speed offset from SERVO_STOP (µs). Caps servo speed at large errors.
+// Max speed offset from SERVO_STOP (µs). Caps servo speed at large pan errors.
 #define MAX_SERVO_SPEED  350
+
+// ─── Tilt Axis – 180° Positional Servo ────────────────────────────────────────
+// The 180° servo moves directly to the commanded elevation angle.
+// Calibrate the two endpoints to match your servo's physical range.
+//   TILT_MIN_PWM → antenna horizontal (MIN_TILT_DEG)
+//   TILT_MAX_PWM → antenna at maximum elevation (MAX_TILT_DEG)
+#define TILT_MIN_PWM  1000   // µs at 0° elevation (horizontal)
+#define TILT_MAX_PWM  2000   // µs at MAX_TILT_DEG elevation
 
 // ─── Elevation Limits ────────────────────────────────────────────────────────
 

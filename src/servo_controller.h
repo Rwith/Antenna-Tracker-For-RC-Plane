@@ -6,48 +6,47 @@
 #include "tracker_math.h"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Proportional controller for 360° continuous rotation servos
+// Servo controller
 //
-// 360° servos are speed-controlled (not position-controlled):
-//   PWM > SERVO_STOP  → clockwise  / tilt up
-//   PWM < SERVO_STOP  → counter-clockwise / tilt down
-//   PWM = SERVO_STOP  → stopped
+// Pan axis  – 360° continuous rotation servo (speed-controlled)
+//   Closed-loop P-controller using QMC5883L compass heading as feedback.
+//   PWM > SERVO_STOP → clockwise
+//   PWM < SERVO_STOP → counter-clockwise
+//   PWM = SERVO_STOP → stopped
 //
-// The controller computes:
-//   error = target – current (pan uses shortest-path angle difference)
-//   |error| ≤ deadband  → stop
-//   |error| > deadband  → speed = Kp × (|error| − deadband), capped at MAX_SERVO_SPEED
-//
-// Tune Kp and deadband in config.h.
+// Tilt axis – 180° standard positional servo (angle-controlled)
+//   No feedback needed; the servo moves directly to the commanded elevation.
+//   TILT_MIN_PWM µs → MIN_TILT_DEG (antenna horizontal)
+//   TILT_MAX_PWM µs → MAX_TILT_DEG (antenna near-vertical)
+//   Both endpoints are configurable in config.h.
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ServoController {
 public:
     void begin() {
-        _panServo.attach(PAN_SERVO_PIN,  900, 2100);
-        _tiltServo.attach(TILT_SERVO_PIN, 900, 2100);
+        _panServo.attach(PAN_SERVO_PIN,   900, 2100);
+        _tiltServo.attach(TILT_SERVO_PIN, 500, 2500);  // wider range for 180° servos
         stop();
     }
 
-    // Set the desired pan (azimuth) and tilt (elevation) angles in degrees.
+    // Set the desired pan (azimuth, degrees) and tilt (elevation, degrees).
     void setTarget(float panDeg, float tiltDeg) {
         _targetPan  = panDeg;
         _targetTilt = constrain(tiltDeg, MIN_TILT_DEG, MAX_TILT_DEG);
     }
 
-    // Call every loop iteration with fresh sensor readings.
-    void update(float currentPan, float currentTilt) {
-        float panError  = normalizeAngleDiff(_targetPan - currentPan);
-        float tiltError = _targetTilt - currentTilt;
-
-        _writePan (_computePWM(panError,  PAN_DEADBAND,  PAN_KP));
-        _writeTilt(_computePWM(tiltError, TILT_DEADBAND, TILT_KP));
+    // Call every loop iteration with the current compass heading.
+    // Tilt is written directly – no sensor reading required.
+    void update(float currentPan) {
+        float panError = normalizeAngleDiff(_targetPan - currentPan);
+        _writePan(_computePanPWM(panError));
+        _writeTiltAngle(_targetTilt);
     }
 
-    // Immediately stop both servos (call on data timeout / safety).
+    // Stop pan servo; tilt holds its current position (positional servo).
     void stop() {
         _writePan(SERVO_STOP);
-        _writeTilt(SERVO_STOP);
+        // 180° servo holds position passively – no explicit stop needed
     }
 
 private:
@@ -57,26 +56,25 @@ private:
     float _targetPan  = 0.0f;
     float _targetTilt = 0.0f;
 
-    // Convert angular error to a servo PWM value.
-    //   error > 0 → CW / upward   → PWM > SERVO_STOP
-    //   error < 0 → CCW / downward → PWM < SERVO_STOP
-    //   |error| ≤ deadband → PWM = SERVO_STOP (stopped)
-    int _computePWM(float error, float deadband, float kp) {
-        if (fabsf(error) <= deadband) return SERVO_STOP;
+    // Pan: proportional speed controller for the 360° continuous servo.
+    int _computePanPWM(float error) {
+        if (fabsf(error) <= PAN_DEADBAND) return SERVO_STOP;
 
-        // Proportional speed (remove deadband gap for a smooth start)
-        float speed = kp * (fabsf(error) - deadband);
+        float speed = PAN_KP * (fabsf(error) - PAN_DEADBAND);
         speed = constrain(speed, 0.0f, static_cast<float>(MAX_SERVO_SPEED));
 
-        int pwm = SERVO_STOP + static_cast<int>((error > 0.0f) ? speed : -speed);
-        return pwm;
+        return SERVO_STOP + static_cast<int>((error > 0.0f) ? speed : -speed);
     }
 
     void _writePan(int pwm) {
         _panServo.writeMicroseconds(constrain(pwm, SERVO_MAX_CCW, SERVO_MAX_CW));
     }
 
-    void _writeTilt(int pwm) {
-        _tiltServo.writeMicroseconds(constrain(pwm, SERVO_MAX_CCW, SERVO_MAX_CW));
+    // Tilt: map elevation angle linearly to servo microseconds.
+    void _writeTiltAngle(float elevation) {
+        float clamped = constrain(elevation, MIN_TILT_DEG, MAX_TILT_DEG);
+        float ratio   = (clamped - MIN_TILT_DEG) / (MAX_TILT_DEG - MIN_TILT_DEG);
+        int   pwm     = TILT_MIN_PWM + static_cast<int>(ratio * (TILT_MAX_PWM - TILT_MIN_PWM));
+        _tiltServo.writeMicroseconds(pwm);
     }
 };
