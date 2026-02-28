@@ -7,10 +7,11 @@
 #define GPS_TX_PIN   17    // ESP32 GPIO17 → NEO-6M RX  (optional if read-only)
 #define GPS_BAUD     9600
 
-// MAVLink telemetry radio – SiK, RFD900, etc. (UART2)
-#define MAV_RX_PIN   18    // ESP32 GPIO18 ← Radio TX
-#define MAV_TX_PIN   19    // ESP32 GPIO19 → Radio RX  (optional if read-only)
-#define MAV_BAUD     57600 // Match your radio's baud rate
+// BetaFPV ELRS 915 MHz backpack – CRSF protocol (UART2)
+// Connect ELRS TX module's TX pin → ESP32 RX pin (non-inverted, 3.3 V logic)
+#define CRSF_RX_PIN  18    // ESP32 GPIO18 ← ELRS backpack TX
+#define CRSF_TX_PIN  19    // ESP32 GPIO19 → ELRS backpack RX  (optional)
+#define CRSF_BAUD    420000  // CRSF standard baud rate – do not change
 
 // ─── Servo Signal Pins ────────────────────────────────────────────────────────
 
@@ -54,7 +55,7 @@
 // ─── Safety Timeouts ─────────────────────────────────────────────────────────
 
 #define GPS_TIMEOUT_MS         5000   // stop if home GPS data is older than this
-#define MAV_TIMEOUT_MS         3000   // stop if plane GPS data is older than this
+#define CRSF_TIMEOUT_MS        3000   // stop if plane GPS data is older than this
 #define MIN_PLANE_DISTANCE_M   5.0f   // ignore plane if closer than this (m)
                                       // prevents wild spinning when on the ground
 

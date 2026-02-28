@@ -6,7 +6,7 @@
 |---|-----------|---------|
 | 1 | ESP32 DevKit v1 (38-pin) | Main controller |
 | 2 | NEO-6M GPS module | Ground-station position |
-| 3 | SiK / RFD900 telemetry radio | Receives MAVLink from plane |
+| 3 | BetaFPV ELRS 915 MHz backpack | Receives CRSF GPS telemetry from plane |
 | 4 | QMC5883L magnetometer | Pan (azimuth) position feedback |
 | 5 | MPU6050 6-axis IMU | Tilt (elevation) position feedback |
 | 6 | 360° continuous servo × 2 | Pan axis + tilt axis |
@@ -29,16 +29,24 @@ All pin numbers match the defaults in `src/config.h`.  Change the `#define`s the
 
 > The NEO-6M outputs NMEA sentences at 9600 baud by default.
 
-### UART – MAVLink Telemetry Radio (UART2)
+### UART – BetaFPV ELRS 915 MHz Backpack (UART2)
 
-| ESP32 GPIO | Radio pin | Wire colour (suggestion) |
-|------------|-----------|--------------------------|
-| GPIO 18 (RX2) | TX | Green |
-| GPIO 19 (TX2) | RX | Yellow (optional – bidirectional link) |
-| 5 V | VCC | Red |
+The ELRS backpack outputs **CRSF protocol** at **420,000 baud**.
+Signal is **non-inverted 3.3 V logic** – connect directly to the ESP32, no level shifter needed.
+
+| ESP32 GPIO | ELRS backpack pin | Wire colour (suggestion) |
+|------------|-------------------|--------------------------|
+| GPIO 18 (RX2) | TX (backpack → ESP32) | Green |
+| GPIO 19 (TX2) | RX (ESP32 → backpack) | Yellow (optional) |
+| 5 V or 3.3 V | VCC (check your module's rating) | Red |
 | GND | GND | Black |
 
-> Set your radio baud rate in `config.h → MAV_BAUD`.  SiK radios default to 57600.
+> CRSF baud rate is fixed at 420,000 – `CRSF_BAUD` in `config.h` must not be changed.
+
+**Where to find the TX pin on the BetaFPV ELRS backpack:**
+The backpack exposes a UART header (often labelled `T` / `R` or `TX` / `RX`).
+Connect the backpack's `TX` pin to ESP32 `GPIO 18`.  That is the only wire
+required for receive-only telemetry.
 
 ### I2C – QMC5883L Compass + MPU6050 IMU (shared bus)
 
@@ -79,9 +87,9 @@ I2C addresses (fixed in hardware):
              ────VCC────│3.3V                            │  │
              ────GND────│GND                             │  │
                         │                                │  │
- Telem Radio ────TX────▶│GPIO18       ┌──────────────────┘  │
+ ELRS Backpack───TX────▶│GPIO18       ┌──────────────────┘  │
               ◀──RX─────│GPIO19       │  I2C bus             │
-              ────VCC───│5V (or ext.) │                      │
+              ────VCC───│3.3V/5V      │                      │
               ────GND───│GND          ├─── QMC5883L (0x0D)  │
                         │             └─── MPU6050  (0x68)  │
  Pan Servo ──signal─────│GPIO25                            │

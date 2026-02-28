@@ -24,7 +24,7 @@ An open-source ESP32 firmware that automatically points a directional antenna to
 ```
 
 1. The **NEO-6M GPS** gives the tracker's own position.
-2. The **MAVLink telemetry radio** receives `GLOBAL_POSITION_INT` messages from the plane's autopilot (ArduPlane / ArduPilot).
+2. The **BetaFPV ELRS 915 MHz backpack** receives CRSF `GPS` frames (frame type 0x02) from the plane's ELRS receiver at 420,000 baud.
 3. The firmware computes the required **bearing** (azimuth) and **elevation angle**.
 4. A **QMC5883L magnetometer** on the pan platform provides the current heading.
 5. An **MPU6050 IMU** on the tilt arm provides the current elevation angle.
@@ -38,7 +38,7 @@ An open-source ESP32 firmware that automatically points a directional antenna to
 |-----------|-------|
 | ESP32 DevKit (any 38-pin) | |
 | NEO-6M GPS module | Ground station position |
-| SiK / RFD900 telemetry radio | Receives MAVLink from plane |
+| BetaFPV ELRS 915 MHz backpack | CRSF GPS telemetry from plane |
 | QMC5883L magnetometer | Pan / azimuth feedback |
 | MPU6050 IMU | Tilt / elevation feedback |
 | 2 × 360° continuous-rotation servo | Pan axis + tilt axis |
@@ -70,8 +70,8 @@ Edit **`src/config.h`** to match your wiring:
 ```c
 // UART pins
 #define GPS_RX_PIN   16
-#define MAV_RX_PIN   18
-#define MAV_BAUD     57600   // match your radio
+#define CRSF_RX_PIN  18     // ELRS backpack TX → ESP32 GPIO 18
+// CRSF_BAUD is fixed at 420000 – do not change
 
 // Servo pins
 #define PAN_SERVO_PIN   25
@@ -121,8 +121,8 @@ Quick summary:
 |------------|-------------|
 | 16 (RX1) | NEO-6M TX |
 | 17 (TX1) | NEO-6M RX |
-| 18 (RX2) | Telemetry radio TX |
-| 19 (TX2) | Telemetry radio RX |
+| 18 (RX2) | ELRS backpack TX (CRSF) |
+| 19 (TX2) | ELRS backpack RX (optional) |
 | 21 (SDA) | QMC5883L SDA + MPU6050 SDA |
 | 22 (SCL) | QMC5883L SCL + MPU6050 SCL |
 | 25 | Pan servo signal |
@@ -171,15 +171,23 @@ All gains and deadbands are in `src/config.h`:
 
 ---
 
-## MAVLink Compatibility
+## ELRS / CRSF Compatibility
 
-The tracker listens for **`GLOBAL_POSITION_INT`** (message ID 33), which is transmitted by:
+The tracker reads **CRSF GPS frames** (frame type `0x02`) delivered by the **BetaFPV ELRS 915 MHz backpack** via UART at **420,000 baud**.
 
-- ArduPlane
-- ArduCopter
-- PX4 (via MAVLink v1 bridge)
+### Plane-side setup (ArduPilot / Betaflight)
+The ELRS receiver on the plane must be configured to forward GPS telemetry back over the RC link.  In ArduPilot, enable CRSF telemetry on the serial port connected to the ELRS RX:
+```
+SERIALx_PROTOCOL = 23   (RCIN)
+```
+ArduPilot will automatically send GPS, attitude, and battery frames to the ELRS RX, which relays them through the 915 MHz link to your backpack on the ground.
 
-Default telemetry radio baud rate is **57600**.  Change `MAV_BAUD` in `config.h` to match your radio's configured rate.
+### What data is used
+| CRSF frame | Type | Used for |
+|---|---|---|
+| GPS (0x02) | lat, lon, altitude, satellites | Bearing + elevation calculation |
+
+The CRSF GPS altitude field carries **metres MSL with a 1000 m offset** (`raw_uint16 − 1000 = altitude_m`).
 
 ---
 
@@ -193,7 +201,7 @@ Default telemetry radio baud rate is **57600**.  Change `MAV_BAUD` in `config.h`
 └── src/
     ├── main.cpp            Setup, main loop, data flow
     ├── config.h            All pin/constant configuration (edit this)
-    ├── mavlink_parser.h    Lightweight MAVLink v1 parser (GLOBAL_POSITION_INT)
+    ├── crsf_parser.h       CRSF frame parser for ELRS backpack (GPS frame type 0x02)
     ├── compass.h           QMC5883L driver (pan feedback)
     ├── imu.h               MPU6050 driver (tilt feedback)
     ├── tracker_math.h      Haversine distance, bearing, elevation calculations

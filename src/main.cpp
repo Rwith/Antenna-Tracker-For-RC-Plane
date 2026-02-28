@@ -4,19 +4,19 @@
 #include <TinyGPSPlus.h>
 
 #include "config.h"
-#include "mavlink_parser.h"
+#include "crsf_parser.h"
 #include "compass.h"
 #include "imu.h"
 #include "tracker_math.h"
 #include "servo_controller.h"
 
 // ─── Hardware serial ports ────────────────────────────────────────────────────
-HardwareSerial gpsSerial(1);  // UART1 → NEO-6M GPS
-HardwareSerial mavSerial(2);  // UART2 → MAVLink telemetry radio
+HardwareSerial gpsSerial(1);   // UART1 → NEO-6M GPS
+HardwareSerial elrsSerial(2);  // UART2 → BetaFPV ELRS 915 MHz backpack (CRSF)
 
 // ─── Component instances ──────────────────────────────────────────────────────
-TinyGPSPlus     gps;
-MAVLinkParser   mavParser(mavSerial);
+TinyGPSPlus  gps;
+CRSFParser   crsfParser(elrsSerial);
 Compass         compass;
 IMU             imu;
 ServoController tracker;
@@ -36,8 +36,8 @@ void setup() {
     // NEO-6M GPS
     gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
 
-    // MAVLink telemetry radio
-    mavSerial.begin(MAV_BAUD, SERIAL_8N1, MAV_RX_PIN, MAV_TX_PIN);
+    // BetaFPV ELRS 915 MHz backpack – CRSF at 420000 baud
+    elrsSerial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_RX_PIN, CRSF_TX_PIN);
 
     // Compass (pan feedback)
     if (!compass.begin()) {
@@ -83,16 +83,16 @@ void loop() {
         }
     }
 
-    // ── 2. Feed MAVLink telemetry ─────────────────────────────────────────────
-    mavParser.update(planePos);
+    // ── 2. Feed CRSF telemetry from ELRS backpack ────────────────────────────
+    crsfParser.update(planePos);
 
     // ── 3. Compute target angles and drive servos ─────────────────────────────
     if (homePos.valid && planePos.valid) {
         uint32_t now      = millis();
         bool homeGpsOk    = (gps.location.age() < GPS_TIMEOUT_MS);
-        bool mavLinkOk    = (now - planePos.lastUpdate < MAV_TIMEOUT_MS);
+        bool crsfOk       = (now - planePos.lastUpdate < CRSF_TIMEOUT_MS);
 
-        if (homeGpsOk && mavLinkOk) {
+        if (homeGpsOk && crsfOk) {
             double dist = haversineDistance(homePos.lat, homePos.lon,
                                             planePos.lat, planePos.lon);
 
@@ -127,7 +127,7 @@ void loop() {
             if (millis() - lastWarn >= 2000u) {
                 lastWarn = millis();
                 if (!homeGpsOk)  Serial.println("[WARN]  Home GPS timeout – servos stopped.");
-                if (!mavLinkOk)  Serial.println("[WARN]  MAVLink timeout – servos stopped.");
+                if (!crsfOk)     Serial.println("[WARN]  ELRS/CRSF timeout – servos stopped.");
             }
         }
 
