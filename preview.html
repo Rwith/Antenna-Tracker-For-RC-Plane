@@ -135,7 +135,7 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
     <div class="row"><span class="lbl">Max distance</span> <span class="val"      id="fsDist">--</span></div>
   </div>
 
-  <div class="card" style="grid-column:1/-1">
+  <div class="card" style="grid-column:span 2">
     <div class="ct" style="display:flex;justify-content:space-between;align-items:center">
       <span>Live Graph</span>
       <select id="graphMetric" onchange="switchMetric()" style="background:#0f1117;color:#e0e2ec;border:1px solid #2a2d3a;border-radius:3px;padding:2px 8px;font-family:inherit;font-size:11px;cursor:pointer">
@@ -201,20 +201,22 @@ function mkEl(h){const e=document.createElement('div');e.innerHTML=h;return e;}
 // ── Live graph (Chart.js) ─────────────────────────────────────────────────
 const GRAPH_MAX=120;
 const METRICS={
-  speed:    {label:'Speed',        unit:'km/h', color:'#60a5fa',fill:'rgba(96,165,250,.12)'},
-  altitude: {label:'Altitude',     unit:'m',    color:'#4ade80',fill:'rgba(74,222,128,.12)'},
-  distance: {label:'Distance',     unit:'m',    color:'#f97316',fill:'rgba(249,115,22,.12)'},
-  rssi:     {label:'RSSI',         unit:'dBm',  color:'#f87171',fill:'rgba(248,113,113,.12)'},
-  lq:       {label:'Link Quality', unit:'%',    color:'#a78bfa',fill:'rgba(167,139,250,.12)'},
-  tilt:     {label:'Tilt Angle',   unit:'°',    color:'#facc15',fill:'rgba(250,204,21,.12)'},
+  speed:    {label:'Speed',        unit:'km/h', color:'#60a5fa'},
+  altitude: {label:'Altitude',     unit:'m',    color:'#4ade80'},
+  distance: {label:'Distance',     unit:'m',    color:'#f97316'},
+  rssi:     {label:'RSSI',         unit:'dBm',  color:'#f87171'},
+  lq:       {label:'Link Quality', unit:'%',    color:'#a78bfa'},
+  tilt:     {label:'Tilt Angle',   unit:'°',    color:'#facc15'},
 };
 const gBuf={speed:[],altitude:[],distance:[],rssi:[],lq:[],tilt:[]};
 const gLbl=[];let curMetric='speed';
+function hexRgb(h){return[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+const gradFill=ctx=>{const{ctx:c,chartArea:a}=ctx.chart;if(!a)return'transparent';const[r,g,b]=hexRgb(METRICS[curMetric].color);const gr=c.createLinearGradient(0,a.top,0,a.bottom);gr.addColorStop(0,`rgba(${r},${g},${b},.45)`);gr.addColorStop(1,`rgba(${r},${g},${b},.03)`);return gr;};
 Chart.defaults.color='#8b8fa8';
 const chart=new Chart(document.getElementById('liveChart'),{
   type:'line',
   data:{labels:gLbl,datasets:[{label:'Speed (km/h)',data:gBuf.speed,
-    borderColor:'#60a5fa',backgroundColor:'rgba(96,165,250,.12)',
+    borderColor:'#60a5fa',backgroundColor:gradFill,
     borderWidth:1.5,pointRadius:0,tension:0.35,fill:true}]},
   options:{animation:false,responsive:true,maintainAspectRatio:false,
     plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,
@@ -227,7 +229,7 @@ function switchMetric(){
   curMetric=document.getElementById('graphMetric').value;
   const m=METRICS[curMetric];const ds=chart.data.datasets[0];
   ds.label=m.label+' ('+m.unit+')';ds.data=gBuf[curMetric];
-  ds.borderColor=m.color;ds.backgroundColor=m.fill;
+  ds.borderColor=m.color;
   chart.update('none');
 }
 function pushGraph(d){
