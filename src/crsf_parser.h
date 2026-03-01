@@ -22,17 +22,34 @@
 //   Bytes 12-13: Altitude    (uint16, metres + 1000 m offset)
 //   Byte  14   : Satellites  (uint8)
 //
+// CRSF_FRAMETYPE_LINK_STATISTICS (0x14) – 10-byte payload:
+//   Byte 0 : Uplink RSSI antenna 1  (uint8, -dBm; 0 = no signal)
+//   Byte 1 : Uplink RSSI antenna 2  (uint8, -dBm)
+//   Byte 2 : Uplink link quality    (uint8, 0–100 %)
+//   Byte 3 : Uplink SNR             (int8,  dB)
+//   Byte 4 : Active antenna         (uint8, 0 or 1)
+//   Byte 5 : RF mode                (uint8, rate index)
+//   Byte 6 : Uplink TX power        (uint8, index: 0=0,1=10,2=25,3=100,4=500,
+//                                            5=1000,6=2000,7=250,8=50 mW)
+//   Byte 7 : Downlink RSSI          (uint8, -dBm)
+//   Byte 8 : Downlink link quality  (uint8, 0–100 %)
+//   Byte 9 : Downlink SNR           (int8,  dB)
+//
 // UART: 420000 baud, 8N1, non-inverted (direct connection to ESP32)
 // ─────────────────────────────────────────────────────────────────────────────
 
 #define CRSF_BAUD_RATE          420000u
 
-#define CRSF_FRAMETYPE_GPS      0x02u
-#define CRSF_GPS_PAYLOAD_LEN    15u
-// LEN field value for a GPS frame = TYPE(1) + PAYLOAD(15) + CRC(1) = 17
-#define CRSF_GPS_FRAME_LEN      17u
+#define CRSF_FRAMETYPE_GPS          0x02u
+#define CRSF_GPS_PAYLOAD_LEN        15u
 
-#define CRSF_MAX_FRAME_LEN      64u    // maximum any CRSF frame can be
+#define CRSF_FRAMETYPE_LINK_STATS   0x14u
+#define CRSF_LINK_STATS_PAYLOAD_LEN 10u
+
+// Internal payload buffer must hold the largest frame type we decode
+#define CRSF_MAX_PAYLOAD_LEN        CRSF_GPS_PAYLOAD_LEN   // GPS (15) > link stats (10)
+
+#define CRSF_MAX_FRAME_LEN          64u    // maximum any CRSF frame can be
 
 // Valid CRSF device addresses – any of these can appear as the first byte
 static constexpr uint8_t CRSF_VALID_ADDRS[] = {
@@ -54,16 +71,27 @@ struct PlaneGPS {
     uint32_t lastUpdate = 0;     // millis() when last valid packet was received
 };
 
+struct LinkStats {
+    int8_t   uplinkRSSI  = 0;    // active-antenna RSSI (dBm, negative)
+    uint8_t  uplinkLQ    = 0;    // uplink link quality (0–100 %)
+    int8_t   uplinkSNR   = 0;    // uplink SNR (dB)
+    uint8_t  txPowerIdx  = 0;    // TX power index (see comment block above)
+    uint8_t  rfMode      = 0;    // RF mode/rate index
+    bool     valid       = false; // true once at least one frame has been received
+    uint32_t lastUpdate  = 0;
+};
+
 class CRSFParser {
 public:
     explicit CRSFParser(HardwareSerial &serial) : _ser(serial) {}
 
-    // Call every loop iteration. Populates `out` on each valid GPS packet.
-    void update(PlaneGPS &out) {
+    // Call every loop iteration.  Dispatches to the appropriate decoder on
+    // each complete, CRC-valid frame.
+    void update(PlaneGPS &gps, LinkStats &ls) {
         while (_ser.available()) {
-            if (_parseByte(static_cast<uint8_t>(_ser.read()))) {
-                _decodeGPS(out);
-            }
+            uint8_t ft = _parseByte(static_cast<uint8_t>(_ser.read()));
+            if      (ft == 1u) _decodeGPS(gps);
+            else if (ft == 2u) _decodeLinkStats(ls);
         }
     }
 
@@ -76,7 +104,7 @@ private:
     uint8_t _frameLen     = 0;   // value of the LEN field
     uint8_t _type         = 0;
     uint8_t _pIdx         = 0;
-    uint8_t _payload[CRSF_GPS_PAYLOAD_LEN];
+    uint8_t _payload[CRSF_MAX_PAYLOAD_LEN];
     uint8_t _computedCRC  = 0;
 
     // CRC8/DVB-S2: poly 0xD5, init 0x00
@@ -97,8 +125,8 @@ private:
         return false;
     }
 
-    // Returns true when a complete, CRC-valid GPS frame has been received.
-    bool _parseByte(uint8_t c) {
+    // Returns: 0 = no complete frame yet, 1 = GPS frame ready, 2 = link stats ready.
+    uint8_t _parseByte(uint8_t c) {
         switch (_state) {
 
             case S_ADDR:
@@ -143,14 +171,28 @@ private:
                 break;
             }
 
-            case S_CRC:
+            case S_CRC: {
                 _state = S_ADDR;
-                // Valid if: CRC matches, type is GPS, payload length is correct
-                return (c              == _computedCRC          &&
-                        _type          == CRSF_FRAMETYPE_GPS    &&
-                        (_frameLen - 2u) == CRSF_GPS_PAYLOAD_LEN);
+                if (c != _computedCRC) return 0u;
+                uint8_t payLen = _frameLen - 2u;
+                if (_type == CRSF_FRAMETYPE_GPS        && payLen == CRSF_GPS_PAYLOAD_LEN)        return 1u;
+                if (_type == CRSF_FRAMETYPE_LINK_STATS && payLen == CRSF_LINK_STATS_PAYLOAD_LEN) return 2u;
+                return 0u;
+            }
         }
-        return false;
+        return 0u;
+    }
+
+    void _decodeLinkStats(LinkStats &out) {
+        // Pick RSSI from the active antenna (byte 4 selects 0=ant1, 1=ant2)
+        uint8_t rssiRaw  = (_payload[4] == 0u) ? _payload[0] : _payload[1];
+        out.uplinkRSSI   = (rssiRaw == 0u) ? 0 : -static_cast<int8_t>(rssiRaw);
+        out.uplinkLQ     = _payload[2];
+        out.uplinkSNR    = static_cast<int8_t>(_payload[3]);
+        out.rfMode       = _payload[5];
+        out.txPowerIdx   = _payload[6];
+        out.valid        = true;
+        out.lastUpdate   = millis();
     }
 
     void _decodeGPS(PlaneGPS &out) {

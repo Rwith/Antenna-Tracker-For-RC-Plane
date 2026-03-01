@@ -22,8 +22,9 @@ ServoController tracker;
 TrackerWebServer webServer;
 
 // ─── State ────────────────────────────────────────────────────────────────────
-PlaneGPS planePos = {};   // zero-init; valid=false by default
-HomeGPS  homePos  = { 0, 0, 0, false };
+PlaneGPS  planePos  = {};   // zero-init; valid=false by default
+HomeGPS   homePos   = { 0, 0, 0, false };
+LinkStats linkStats = {};
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
 void setup() {
@@ -80,7 +81,7 @@ void loop() {
     }
 
     // ── 2. Feed CRSF telemetry from ELRS backpack ────────────────────────────
-    crsfParser.update(planePos);
+    crsfParser.update(planePos, linkStats);
 
     // ── 3. Compute target angles and drive servos ─────────────────────────────
     if (homePos.valid && planePos.valid) {
@@ -161,6 +162,12 @@ void loop() {
     webServer.status.planeAlt     = planePos.alt;
     webServer.status.planeSpeed   = planePos.speedKmh;
     webServer.status.planeHeading = planePos.headingDeg;
+    webServer.status.linkRSSI     = linkStats.uplinkRSSI;
+    webServer.status.linkLQ       = linkStats.uplinkLQ;
+    webServer.status.linkSNR      = linkStats.uplinkSNR;
+    webServer.status.linkTxPwr    = linkStats.txPowerIdx;
+    webServer.status.linkRfMode   = linkStats.rfMode;
+    webServer.status.linkValid    = linkStats.valid;
     webServer.status.panAngle   = compass.getHeading();
     webServer.status.tiltAngle  = tracker.getTiltAngle();
 

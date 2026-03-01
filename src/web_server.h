@@ -34,6 +34,14 @@ struct TrackerStatus {
     // Signal health
     bool homeGpsOk = false;
     bool crsfOk    = false;
+
+    // RF link stats (CRSF 0x14)
+    int8_t  linkRSSI    = 0;
+    uint8_t linkLQ      = 0;
+    int8_t  linkSNR     = 0;
+    uint8_t linkTxPwr   = 0;   // TX power index
+    uint8_t linkRfMode  = 0;
+    bool    linkValid   = false;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -145,6 +153,23 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
     <div class="row"><span class="lbl">Heading</span>   <span class="val" id="pHdg">--</span></div>
   </div>
 
+  <div class="card">
+    <div class="ct">RF Link (ELRS)</div>
+    <div class="row">
+      <span class="lbl">Link quality</span>
+      <span style="display:flex;align-items:center;gap:6px">
+        <div style="width:55px;height:5px;border-radius:3px;background:#2a2d3a;overflow:hidden">
+          <div id="rLQfill" style="height:100%;width:0%;border-radius:3px;background:var(--green);transition:width .5s,background .5s"></div>
+        </div>
+        <span class="val" id="rLQ">--</span>
+      </span>
+    </div>
+    <div class="row"><span class="lbl">RSSI</span>     <span class="val" id="rRSSI">--</span></div>
+    <div class="row"><span class="lbl">SNR</span>      <span class="val" id="rSNR">--</span></div>
+    <div class="row"><span class="lbl">TX power</span> <span class="val" id="rPwr">--</span></div>
+    <div class="row"><span class="lbl">RF mode</span>  <span class="val" id="rMode">--</span></div>
+  </div>
+
   <div class="card map-card">
     <div class="ct">Live Map &nbsp;&#x25CF; <span class="ok">green</span> = tracker &nbsp;&#x25CF; <span class="info">blue</span> = plane</div>
     <div id="map"></div>
@@ -156,6 +181,7 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
 const deg=v=>v.toFixed(1)+'&#xB0;';
 const mt =v=>v.toFixed(0)+' m';
 const ind=(v,t,f)=>`<span class="${v?'ok':'warn'}"><span class="dot"></span>${v?t:f}</span>`;
+const TX_PWR=['Off','10 mW','25 mW','100 mW','500 mW','1 W','2 W','250 mW','50 mW'];
 function arrow(id,a,len){
   const r=(a-90)*Math.PI/180,el=document.getElementById(id);
   el.setAttribute('x2',(Math.cos(r)*len).toFixed(1));
@@ -213,6 +239,17 @@ async function poll(){
     document.getElementById('pSpd').textContent=d.planeSpeed.toFixed(1)+' km/h';
     document.getElementById('pHdg').textContent=deg(d.planeHeading);
     if(!cfgLoaded){document.getElementById('cfgMin').value=d.minTrackDist.toFixed(0);cfgLoaded=true;}
+    // ── RF Link ───────────────────────────────────────────────────────────────
+    if(d.linkValid){
+      const lq=d.linkLQ;
+      document.getElementById('rLQ').textContent=lq+'%';
+      document.getElementById('rLQfill').style.width=lq+'%';
+      document.getElementById('rLQfill').style.background=lq>=70?'var(--green)':lq>=40?'#facc15':'var(--red)';
+      document.getElementById('rRSSI').textContent=d.linkRSSI+' dBm';
+      document.getElementById('rSNR').textContent=d.linkSNR+' dB';
+      document.getElementById('rPwr').textContent=TX_PWR[d.linkTxPwr]||'?';
+      document.getElementById('rMode').textContent='Mode '+d.linkRfMode;
+    }
     // ── Map markers ──────────────────────────────────────────────────────────
     if(d.homeValid){
       if(!hM){hM=L.marker([d.homeLat,d.homeLon],{icon:mkIcon('#4ade80')})
@@ -290,7 +327,7 @@ private:
     }
 
     void _handleData() {
-        char buf[512];
+        char buf[640];
         snprintf(buf, sizeof(buf),
             "{\"homeValid\":%s,\"homeLat\":%.7f,\"homeLon\":%.7f,"
             "\"homeAlt\":%.1f,\"homeSats\":%u,"
@@ -300,7 +337,9 @@ private:
             "\"bearing\":%.1f,\"elevation\":%.1f,\"distM\":%.0f,"
             "\"panAngle\":%.1f,\"tiltAngle\":%.1f,"
             "\"homeGpsOk\":%s,\"crsfOk\":%s,"
-            "\"minTrackDist\":%.1f}",
+            "\"minTrackDist\":%.1f,"
+            "\"linkRSSI\":%d,\"linkLQ\":%u,\"linkSNR\":%d,"
+            "\"linkTxPwr\":%u,\"linkRfMode\":%u,\"linkValid\":%s}",
             status.homeValid  ? "true" : "false",
             status.homeLat, status.homeLon, status.homeAlt,
             static_cast<unsigned>(status.homeSats),
@@ -312,7 +351,13 @@ private:
             status.panAngle, status.tiltAngle,
             status.homeGpsOk  ? "true" : "false",
             status.crsfOk     ? "true" : "false",
-            minTrackDist
+            minTrackDist,
+            static_cast<int>(status.linkRSSI),
+            static_cast<unsigned>(status.linkLQ),
+            static_cast<int>(status.linkSNR),
+            static_cast<unsigned>(status.linkTxPwr),
+            static_cast<unsigned>(status.linkRfMode),
+            status.linkValid  ? "true" : "false"
         );
         _srv.send(200, "application/json", buf);
     }
