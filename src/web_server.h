@@ -195,7 +195,7 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
   <div class="card map-card">
     <div class="ct" style="display:flex;justify-content:space-between;align-items:center">
       <span>Live Map &nbsp;&#x25CF; <span class="ok">green</span> = tracker &nbsp;&#x25CF; <span class="info">blue</span> = plane &nbsp;&#x25CF; <span class="info">column</span> = altitude</span>
-      <button onclick="toggleView()" style="background:#2a2d3a;color:#60a5fa;border:1px solid #2a2d3a;border-radius:3px;padding:1px 7px;cursor:pointer;font-family:inherit;font-size:11px">3D &#x25B2;</button>
+      <button id="viewToggleBtn" onclick="toggleView()" style="background:#2a2d3a;color:#60a5fa;border:1px solid #2a2d3a;border-radius:3px;padding:1px 7px;cursor:pointer;font-family:inherit;font-size:11px">2D &#x25BC;</button>
     </div>
     <div id="map"></div>
   </div>
@@ -252,7 +252,8 @@ function mkEl(h){const e=document.createElement('div');e.innerHTML=h;return e;}
 function poleGJ(lon,lat,alt){const d=0.00005;return{type:'FeatureCollection',features:[{
   type:'Feature',properties:{alt:Math.max(alt,1)},
   geometry:{type:'Polygon',coordinates:[[[lon-d,lat-d],[lon+d,lat-d],[lon+d,lat+d],[lon-d,lat+d],[lon-d,lat-d]]]}}]};}
-function toggleView(){map.easeTo({pitch:map.getPitch()>10?0:55,duration:800});}
+let is3D=true;
+function toggleView(){is3D=!is3D;map.easeTo({pitch:is3D?55:0,duration:800});document.getElementById('viewToggleBtn').innerHTML=is3D?'2D &#x25BC;':'3D &#x25B2;';}
 // ──────────────────────────────────────────────────────────────────────────
 async function poll(){
   try{
@@ -304,14 +305,14 @@ async function poll(){
     if(mapReady){
       if(d.homeValid){
         if(!hMarker){hMarker=new maplibregl.Marker({element:mkEl('<div style="width:13px;height:13px;border-radius:50%;background:#4ade80;border:2px solid rgba(255,255,255,.4)"></div>')})
-          .setLngLat([d.homeLon,d.homeLat]).setPopup(new maplibregl.Popup({offset:10}).setHTML('<b>Tracker</b><br>'+d.homeAlt.toFixed(1)+' m MSL')).addTo(map);}
-        else hMarker.setLngLat([d.homeLon,d.homeLat]);
+          .setLngLat([d.homeLon,d.homeLat,d.homeAlt]).setPopup(new maplibregl.Popup({offset:10}).setHTML('<b>Tracker</b><br>'+d.homeAlt.toFixed(1)+' m MSL')).addTo(map);}
+        else hMarker.setLngLat([d.homeLon,d.homeLat,d.homeAlt]);
       }
       if(d.planeValid){
         const ph='<svg width="18" height="18" viewBox="-9 -9 18 18" style="transform:rotate('+d.planeHeading+'deg)"><polygon points="0,-8 5,6 0,3 -5,6" fill="#60a5fa" stroke="rgba(255,255,255,.4)" stroke-width="1.5"/></svg>';
         if(!pMarker){pMarker=new maplibregl.Marker({element:mkEl(ph)})
-          .setLngLat([d.planeLon,d.planeLat]).setPopup(new maplibregl.Popup({offset:10}).setHTML('<b>Plane</b><br>'+d.planeAlt.toFixed(1)+' m MSL &bull; '+d.planeSpeed.toFixed(1)+' km/h')).addTo(map);}
-        else{pMarker.setLngLat([d.planeLon,d.planeLat]);pMarker.getElement().innerHTML=ph;}
+          .setLngLat([d.planeLon,d.planeLat,d.planeAlt]).setPopup(new maplibregl.Popup({offset:10}).setHTML('<b>Plane</b><br>'+d.planeAlt.toFixed(1)+' m MSL &bull; '+d.planeSpeed.toFixed(1)+' km/h')).addTo(map);}
+        else{pMarker.setLngLat([d.planeLon,d.planeLat,d.planeAlt]);pMarker.getElement().innerHTML=ph;}
         trailCoords.push([d.planeLon,d.planeLat]);
         if(trailCoords.length>TRAIL_MAX)trailCoords.shift();
         map.getSource('trail').setData({type:'Feature',geometry:{type:'LineString',coordinates:trailCoords}});
