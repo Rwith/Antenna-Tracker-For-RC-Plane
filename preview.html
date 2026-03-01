@@ -26,7 +26,7 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
 .ok{color:var(--green)}.warn{color:var(--red)}.info{color:var(--blue)}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;
      margin-right:4px;background:currentColor}
-.rose{display:flex;justify-content:center;margin-bottom:11px}
+.rose{display:flex;justify-content:center;align-items:center;gap:14px;margin-bottom:11px}
 .map-card{grid-column:1/-1}
 #map{height:420px;border-radius:6px;overflow:hidden}
 .maplibregl-ctrl-attrib{background:rgba(26,29,39,.8)!important;color:#8b8fa8!important}
@@ -60,6 +60,25 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
         <line id="aP" x1="0" y1="0" x2="0" y2="-41"
               stroke="#4ade80" stroke-width="2" stroke-linecap="round"
               stroke-dasharray="5 3"/>
+        <circle r="3" fill="#1a1d27" stroke="#8b8fa8" stroke-width="1.5"/>
+      </svg>
+      <!-- Elevation gauge – side-profile quarter-arc, 0° (horizon) → 90° (zenith) -->
+      <svg width="72" height="70" viewBox="-5 -65 72 70" style="display:block">
+        <!-- horizon baseline -->
+        <line x1="-3" y1="0" x2="58" y2="0" stroke="#2a2d3a" stroke-width="1"/>
+        <!-- quarter-circle arc -->
+        <path d="M 55 0 A 55 55 0 0 0 0 -55" fill="none" stroke="#2a2d3a" stroke-width="1.5"/>
+        <!-- tick at 30° -->
+        <line x1="44" y1="-26" x2="48" y2="-28" stroke="#2a2d3a" stroke-width="1"/>
+        <!-- tick at 60° -->
+        <line x1="26" y1="-44" x2="28" y2="-48" stroke="#2a2d3a" stroke-width="1"/>
+        <!-- degree labels -->
+        <text x="57" y="4"   font-size="8" fill="#8b8fa8" font-family="monospace" text-anchor="start">0°</text>
+        <text x="3"  y="-56" font-size="8" fill="#8b8fa8" font-family="monospace" text-anchor="start">90°</text>
+        <!-- tilt needle (updated by JS) -->
+        <line id="aTlt" x1="0" y1="0" x2="55" y2="0"
+              stroke="#4ade80" stroke-width="2" stroke-linecap="round"/>
+        <!-- pivot -->
         <circle r="3" fill="#1a1d27" stroke="#8b8fa8" stroke-width="1.5"/>
       </svg>
     </div>
@@ -170,6 +189,11 @@ function arrow(id,a,len){
   const r=(a-90)*Math.PI/180,el=document.getElementById(id);
   el.setAttribute('x2',(Math.cos(r)*len).toFixed(1));
   el.setAttribute('y2',(Math.sin(r)*len).toFixed(1));
+}
+function elevArrow(id,deg,r){
+  const a=Math.max(0,Math.min(90,deg))*Math.PI/180;
+  document.getElementById(id).setAttribute('x2',(r*Math.cos(a)).toFixed(1));
+  document.getElementById(id).setAttribute('y2',(-r*Math.sin(a)).toFixed(1));
 }
 
 // ── Map (MapLibre GL) ────────────────────────────────────────────────────
@@ -296,6 +320,7 @@ function poll() {
   const d = mockData();
   document.getElementById('ts').textContent = 'Preview – updated ' + new Date().toLocaleTimeString();
   arrow('aB', d.bearing, 50); arrow('aP', d.panAngle, 41);
+  elevArrow('aTlt', d.tiltAngle, 55);
   document.getElementById('vBear').textContent = deg(d.bearing);
   document.getElementById('vPan' ).textContent = deg(d.panAngle);
   document.getElementById('vTilt').textContent = deg(d.tiltAngle);
