@@ -26,6 +26,17 @@ PlaneGPS  planePos  = {};   // zero-init; valid=false by default
 HomeGPS   homePos   = { 0, 0, 0, false };
 LinkStats linkStats = {};
 
+struct FlightAccum {
+    float    maxSpeedKmh = 0.0f;
+    float    maxAltM     = 0.0f;   // MSL
+    float    maxRelAltM  = 0.0f;   // above home
+    float    maxDistM    = 0.0f;
+    bool     running     = false;  // timer active
+    uint32_t startMs     = 0;
+    uint32_t elapsedMs   = 0;
+};
+static FlightAccum fStats;
+
 // ─── Setup ────────────────────────────────────────────────────────────────────
 void setup() {
     Serial.begin(115200);
@@ -170,6 +181,34 @@ void loop() {
     webServer.status.linkValid    = linkStats.valid;
     webServer.status.panAngle   = compass.getHeading();
     webServer.status.tiltAngle  = tracker.getTiltAngle();
+
+    // ── 6. Flight statistics ──────────────────────────────────────────────────
+    if (webServer.status.statsResetReq) {
+        webServer.status.statsResetReq = false;
+        fStats = FlightAccum{};
+    }
+    if (planePos.valid) {
+        // Start timer on first detected movement (>5 km/h)
+        if (!fStats.running && planePos.speedKmh > 5.0f) {
+            fStats.running = true;
+            fStats.startMs = millis();
+        }
+        if (fStats.running) {
+            fStats.elapsedMs = millis() - fStats.startMs;
+        }
+        fStats.maxSpeedKmh = max(fStats.maxSpeedKmh, planePos.speedKmh);
+        fStats.maxAltM     = max(fStats.maxAltM,     planePos.alt);
+        if (homePos.valid) {
+            fStats.maxRelAltM = max(fStats.maxRelAltM, planePos.alt - homePos.alt);
+        }
+    }
+    fStats.maxDistM = max(fStats.maxDistM, webServer.status.distM);
+
+    webServer.status.maxSpeedKmh = fStats.maxSpeedKmh;
+    webServer.status.maxAltM     = fStats.maxAltM;
+    webServer.status.maxRelAltM  = fStats.maxRelAltM;
+    webServer.status.maxDistM    = fStats.maxDistM;
+    webServer.status.flightMs    = fStats.elapsedMs;
 
     webServer.handle();
 }

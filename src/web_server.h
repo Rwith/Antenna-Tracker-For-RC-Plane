@@ -42,6 +42,14 @@ struct TrackerStatus {
     uint8_t linkTxPwr   = 0;   // TX power index
     uint8_t linkRfMode  = 0;
     bool    linkValid   = false;
+
+    // Flight statistics (accumulated in main.cpp)
+    float    maxSpeedKmh = 0.0f;
+    float    maxAltM     = 0.0f;   // max altitude MSL (m)
+    float    maxRelAltM  = 0.0f;   // max altitude above home (m)
+    float    maxDistM    = 0.0f;   // max horizontal distance (m)
+    uint32_t flightMs    = 0;      // elapsed flight time (ms, timer starts at first movement)
+    bool     statsResetReq = false; // set by /reset handler; cleared by main loop
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -170,6 +178,18 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
     <div class="row"><span class="lbl">RF mode</span>  <span class="val" id="rMode">--</span></div>
   </div>
 
+  <div class="card">
+    <div class="ct" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Flight Stats</span>
+      <button onclick="resetStats()" style="background:#2a2d3a;color:#f87171;border:1px solid #2a2d3a;border-radius:3px;padding:1px 7px;cursor:pointer;font-family:inherit;font-size:11px">Reset</button>
+    </div>
+    <div class="row"><span class="lbl">Flight time</span>  <span class="val info" id="fsTime">0:00</span></div>
+    <div class="row"><span class="lbl">Max speed</span>    <span class="val"      id="fsSpd">--</span></div>
+    <div class="row"><span class="lbl">Max alt (MSL)</span><span class="val"      id="fsAlt">--</span></div>
+    <div class="row"><span class="lbl">Max alt (AGL)</span><span class="val"      id="fsAgl">--</span></div>
+    <div class="row"><span class="lbl">Max distance</span> <span class="val"      id="fsDist">--</span></div>
+  </div>
+
   <div class="card map-card">
     <div class="ct">Live Map &nbsp;&#x25CF; <span class="ok">green</span> = tracker &nbsp;&#x25CF; <span class="info">blue</span> = plane</div>
     <div id="map"></div>
@@ -182,6 +202,9 @@ const deg=v=>v.toFixed(1)+'&#xB0;';
 const mt =v=>v.toFixed(0)+' m';
 const ind=(v,t,f)=>`<span class="${v?'ok':'warn'}"><span class="dot"></span>${v?t:f}</span>`;
 const TX_PWR=['Off','10 mW','25 mW','100 mW','500 mW','1 W','2 W','250 mW','50 mW'];
+function fmtT(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor(m/60);
+  return h?h+':'+String(m%60).padStart(2,'0')+':'+String(s%60).padStart(2,'0')
+          :m+':'+String(s%60).padStart(2,'0');}
 function arrow(id,a,len){
   const r=(a-90)*Math.PI/180,el=document.getElementById(id);
   el.setAttribute('x2',(Math.cos(r)*len).toFixed(1));
@@ -250,6 +273,12 @@ async function poll(){
       document.getElementById('rPwr').textContent=TX_PWR[d.linkTxPwr]||'?';
       document.getElementById('rMode').textContent='Mode '+d.linkRfMode;
     }
+    // ── Flight stats ──────────────────────────────────────────────────────────
+    document.getElementById('fsTime').textContent=fmtT(d.flightMs);
+    document.getElementById('fsSpd' ).textContent=d.maxSpeed.toFixed(1)+' km/h';
+    document.getElementById('fsAlt' ).textContent=d.maxAlt.toFixed(1)+' m';
+    document.getElementById('fsAgl' ).textContent=d.maxRelAlt.toFixed(1)+' m';
+    document.getElementById('fsDist').textContent=mt(d.maxDist);
     // ── Map markers ──────────────────────────────────────────────────────────
     if(d.homeValid){
       if(!hM){hM=L.marker([d.homeLat,d.homeLon],{icon:mkIcon('#4ade80')})
@@ -278,6 +307,7 @@ async function poll(){
     document.getElementById('ts').textContent='&#x26A0; No response \u2013 retrying\u2026';
   }
 }
+async function resetStats(){ await fetch('/reset'); }
 async function setMin(){
   const v=parseFloat(document.getElementById('cfgMin').value);
   if(v>=1&&v<=500) await fetch('/config?minDist='+v);
@@ -314,6 +344,7 @@ public:
         _srv.on("/",       [this]() { _handleRoot();   });
         _srv.on("/data",   [this]() { _handleData();   });
         _srv.on("/config", [this]() { _handleConfig(); });
+        _srv.on("/reset",  [this]() { _handleReset();  });
         _srv.begin();
     }
 
@@ -327,7 +358,7 @@ private:
     }
 
     void _handleData() {
-        char buf[640];
+        char buf[768];
         snprintf(buf, sizeof(buf),
             "{\"homeValid\":%s,\"homeLat\":%.7f,\"homeLon\":%.7f,"
             "\"homeAlt\":%.1f,\"homeSats\":%u,"
@@ -339,7 +370,9 @@ private:
             "\"homeGpsOk\":%s,\"crsfOk\":%s,"
             "\"minTrackDist\":%.1f,"
             "\"linkRSSI\":%d,\"linkLQ\":%u,\"linkSNR\":%d,"
-            "\"linkTxPwr\":%u,\"linkRfMode\":%u,\"linkValid\":%s}",
+            "\"linkTxPwr\":%u,\"linkRfMode\":%u,\"linkValid\":%s,"
+            "\"maxSpeed\":%.1f,\"maxAlt\":%.1f,\"maxRelAlt\":%.1f,"
+            "\"maxDist\":%.0f,\"flightMs\":%lu}",
             status.homeValid  ? "true" : "false",
             status.homeLat, status.homeLon, status.homeAlt,
             static_cast<unsigned>(status.homeSats),
@@ -357,7 +390,9 @@ private:
             static_cast<int>(status.linkSNR),
             static_cast<unsigned>(status.linkTxPwr),
             static_cast<unsigned>(status.linkRfMode),
-            status.linkValid  ? "true" : "false"
+            status.linkValid  ? "true" : "false",
+            status.maxSpeedKmh, status.maxAltM, status.maxRelAltM,
+            status.maxDistM, static_cast<unsigned long>(status.flightMs)
         );
         _srv.send(200, "application/json", buf);
     }
@@ -367,6 +402,11 @@ private:
             float v = _srv.arg("minDist").toFloat();
             if (v >= 1.0f && v <= 500.0f) minTrackDist = v;
         }
+        _srv.send(200, "application/json", "{\"ok\":true}");
+    }
+
+    void _handleReset() {
+        status.statsResetReq = true;
         _srv.send(200, "application/json", "{\"ok\":true}");
     }
 };
