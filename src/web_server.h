@@ -26,8 +26,10 @@ struct TrackerStatus {
     float bearing   = 0.0f;   // target azimuth (degrees)
     float elevation = 0.0f;   // target elevation (degrees)
     float distM     = 0.0f;   // horizontal distance to plane (m)
-    float panAngle  = 0.0f;   // current compass heading (degrees)
-    float tiltAngle = 0.0f;   // current tilt from PWM (degrees)
+    float panAngle     = 0.0f;   // current compass heading (degrees)
+    float tiltAngle    = 0.0f;   // current tilt from PWM (degrees)
+    float planeSpeed   = 0.0f;   // groundspeed km/h (from CRSF)
+    float planeHeading = 0.0f;   // true heading deg (from CRSF)
 
     // Signal health
     bool homeGpsOk = false;
@@ -113,6 +115,15 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
     <div class="row"><span class="lbl">Alt diff</span>  <span class="val" id="tAltD">--</span></div>
     <div class="row"><span class="lbl">Home GPS</span>  <span class="val" id="tHGps">--</span></div>
     <div class="row"><span class="lbl">CRSF link</span> <span class="val" id="tCrsf">--</span></div>
+    <div class="row">
+      <span class="lbl">Min track dist</span>
+      <span style="display:flex;align-items:center;gap:4px">
+        <input id="cfgMin" type="number" min="1" max="500" step="1" value="5"
+               style="width:48px;background:#0f1117;color:#e0e2ec;border:1px solid #2a2d3a;border-radius:3px;padding:1px 4px;font-family:inherit;font-size:12px">
+        <span class="lbl">m</span>
+        <button onclick="setMin()" style="background:#2a2d3a;color:#60a5fa;border:1px solid #2a2d3a;border-radius:3px;padding:1px 7px;cursor:pointer;font-family:inherit;font-size:11px">Set</button>
+      </span>
+    </div>
   </div>
 
   <div class="card">
@@ -130,6 +141,8 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
     <div class="row"><span class="lbl">Latitude</span>  <span class="val" id="pLat">--</span></div>
     <div class="row"><span class="lbl">Longitude</span> <span class="val" id="pLon">--</span></div>
     <div class="row"><span class="lbl">Altitude</span>  <span class="val" id="pAlt">--</span></div>
+    <div class="row"><span class="lbl">Speed</span>     <span class="val info" id="pSpd">--</span></div>
+    <div class="row"><span class="lbl">Heading</span>   <span class="val" id="pHdg">--</span></div>
   </div>
 
   <div class="card map-card">
@@ -160,7 +173,15 @@ function mkIcon(c){
     iconSize:[13,13],iconAnchor:[6,6],className:''
   });
 }
-let hM=null,pM=null,tL=null,autoFit=true;
+function mkPlaneIcon(h){
+  return L.divIcon({
+    html:'<svg width="18" height="18" viewBox="-9 -9 18 18" style="transform:rotate('+h+'deg)"><polygon points="0,-8 5,6 0,3 -5,6" fill="#60a5fa" stroke="rgba(255,255,255,.4)" stroke-width="1.5"/></svg>',
+    iconSize:[18,18],iconAnchor:[9,9],className:''
+  });
+}
+const TRAIL_MAX=300;
+const trail=[];
+let hM=null,pM=null,tL=null,trailLine=null,autoFit=true,cfgLoaded=false;
 map.on('dragstart zoomstart',()=>{autoFit=false;});
 // ──────────────────────────────────────────────────────────────────────────
 async function poll(){
@@ -189,6 +210,9 @@ async function poll(){
     document.getElementById('pLat').textContent=d.planeLat.toFixed(7);
     document.getElementById('pLon').textContent=d.planeLon.toFixed(7);
     document.getElementById('pAlt').textContent=d.planeAlt.toFixed(1)+' m';
+    document.getElementById('pSpd').textContent=d.planeSpeed.toFixed(1)+' km/h';
+    document.getElementById('pHdg').textContent=deg(d.planeHeading);
+    if(!cfgLoaded){document.getElementById('cfgMin').value=d.minTrackDist.toFixed(0);cfgLoaded=true;}
     // ── Map markers ──────────────────────────────────────────────────────────
     if(d.homeValid){
       if(!hM){hM=L.marker([d.homeLat,d.homeLon],{icon:mkIcon('#4ade80')})
@@ -196,10 +220,16 @@ async function poll(){
       else hM.setLatLng([d.homeLat,d.homeLon]);
     }
     if(d.planeValid){
-      const pc='<b>Plane</b><br>'+d.planeAlt.toFixed(1)+' m MSL';
-      if(!pM){pM=L.marker([d.planeLat,d.planeLon],{icon:mkIcon('#60a5fa')})
-        .bindPopup(pc).addTo(map);}
-      else{pM.setLatLng([d.planeLat,d.planeLon]);pM.getPopup().setContent(pc);}
+      const pc='<b>Plane</b><br>'+d.planeAlt.toFixed(1)+' m MSL &bull; '+d.planeSpeed.toFixed(1)+' km/h';
+      const pi=mkPlaneIcon(d.planeHeading);
+      if(!pM){pM=L.marker([d.planeLat,d.planeLon],{icon:pi}).bindPopup(pc).addTo(map);}
+      else{pM.setLatLng([d.planeLat,d.planeLon]).setIcon(pi);pM.getPopup().setContent(pc);}
+      trail.push([d.planeLat,d.planeLon]);
+      if(trail.length>TRAIL_MAX)trail.shift();
+      if(trail.length>1){
+        if(!trailLine){trailLine=L.polyline(trail,{color:'#60a5fa',weight:1,opacity:.25,interactive:false}).addTo(map);trailLine.bringToBack();}
+        else trailLine.setLatLngs(trail);
+      }
     }
     if(d.homeValid&&d.planeValid){
       const pts=[[d.homeLat,d.homeLon],[d.planeLat,d.planeLon]];
@@ -211,6 +241,10 @@ async function poll(){
     document.getElementById('ts').textContent='&#x26A0; No response \u2013 retrying\u2026';
   }
 }
+async function setMin(){
+  const v=parseFloat(document.getElementById('cfgMin').value);
+  if(v>=1&&v<=500) await fetch('/config?minDist='+v);
+}
 poll(); setInterval(poll,1000);
 </script>
 </body>
@@ -220,6 +254,7 @@ poll(); setInterval(poll,1000);
 class TrackerWebServer {
 public:
     TrackerStatus status;
+    float minTrackDist = MIN_PLANE_DISTANCE_M;   // adjustable at runtime via /config
 
     void begin() {
         Serial.printf("[WiFi]  Connecting to %s", WIFI_SSID);
@@ -239,8 +274,9 @@ public:
             Serial.println("[WiFi]  Connection failed – tracker continues without dashboard.");
         }
 
-        _srv.on("/",     [this]() { _handleRoot(); });
-        _srv.on("/data", [this]() { _handleData(); });
+        _srv.on("/",       [this]() { _handleRoot();   });
+        _srv.on("/data",   [this]() { _handleData();   });
+        _srv.on("/config", [this]() { _handleConfig(); });
         _srv.begin();
     }
 
@@ -254,26 +290,38 @@ private:
     }
 
     void _handleData() {
-        char buf[384];
+        char buf[512];
         snprintf(buf, sizeof(buf),
             "{\"homeValid\":%s,\"homeLat\":%.7f,\"homeLon\":%.7f,"
             "\"homeAlt\":%.1f,\"homeSats\":%u,"
             "\"planeValid\":%s,\"planeLat\":%.7f,\"planeLon\":%.7f,"
-            "\"planeAlt\":%.1f,\"tracking\":%s,"
+            "\"planeAlt\":%.1f,\"planeSpeed\":%.1f,\"planeHeading\":%.1f,"
+            "\"tracking\":%s,"
             "\"bearing\":%.1f,\"elevation\":%.1f,\"distM\":%.0f,"
             "\"panAngle\":%.1f,\"tiltAngle\":%.1f,"
-            "\"homeGpsOk\":%s,\"crsfOk\":%s}",
+            "\"homeGpsOk\":%s,\"crsfOk\":%s,"
+            "\"minTrackDist\":%.1f}",
             status.homeValid  ? "true" : "false",
             status.homeLat, status.homeLon, status.homeAlt,
             static_cast<unsigned>(status.homeSats),
             status.planeValid ? "true" : "false",
             status.planeLat, status.planeLon, status.planeAlt,
+            status.planeSpeed, status.planeHeading,
             status.tracking   ? "true" : "false",
             status.bearing, status.elevation, status.distM,
             status.panAngle, status.tiltAngle,
             status.homeGpsOk  ? "true" : "false",
-            status.crsfOk     ? "true" : "false"
+            status.crsfOk     ? "true" : "false",
+            minTrackDist
         );
         _srv.send(200, "application/json", buf);
+    }
+
+    void _handleConfig() {
+        if (_srv.hasArg("minDist")) {
+            float v = _srv.arg("minDist").toFloat();
+            if (v >= 1.0f && v <= 500.0f) minTrackDist = v;
+        }
+        _srv.send(200, "application/json", "{\"ok\":true}");
     }
 };

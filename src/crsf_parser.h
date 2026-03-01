@@ -48,8 +48,10 @@ struct PlaneGPS {
     double   lon;         // degrees
     float    alt;         // metres MSL
     float    relAlt;      // metres above home (not in CRSF GPS; set = alt)
-    bool     valid;
-    uint32_t lastUpdate;  // millis() when last valid packet was received
+    float    speedKmh   = 0.0f;  // groundspeed (km/h)
+    float    headingDeg = 0.0f;  // true heading (degrees, 0 = N)
+    bool     valid      = false;
+    uint32_t lastUpdate = 0;     // millis() when last valid packet was received
 };
 
 class CRSFParser {
@@ -165,6 +167,10 @@ private:
                                (uint32_t)_payload[6] <<  8 |
                                          _payload[7]);
 
+        uint16_t spdRaw  = static_cast<uint16_t>(
+                               ((uint16_t)_payload[8]  << 8) | _payload[9]);
+        uint16_t hdgRaw  = static_cast<uint16_t>(
+                               ((uint16_t)_payload[10] << 8) | _payload[11]);
         uint16_t altRaw  = static_cast<uint16_t>(
                                ((uint16_t)_payload[12] << 8) | _payload[13]);
 
@@ -174,6 +180,8 @@ private:
         out.lon        = static_cast<double>(lon) * 1e-7;
         out.alt        = static_cast<float>(altRaw) - 1000.0f;  // remove 1000 m offset
         out.relAlt     = out.alt;   // CRSF GPS has no relative-altitude field
+        out.speedKmh   = spdRaw / 10.0f;
+        out.headingDeg = hdgRaw / 100.0f;
         out.valid      = (sats >= 4);
         out.lastUpdate = millis();
     }

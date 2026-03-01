@@ -22,7 +22,7 @@ ServoController tracker;
 TrackerWebServer webServer;
 
 // ─── State ────────────────────────────────────────────────────────────────────
-PlaneGPS planePos = { 0, 0, 0, 0, false, 0 };
+PlaneGPS planePos = {};   // zero-init; valid=false by default
 HomeGPS  homePos  = { 0, 0, 0, false };
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -95,7 +95,7 @@ void loop() {
             double dist = haversineDistance(homePos.lat, homePos.lon,
                                             planePos.lat, planePos.lon);
 
-            if (dist >= MIN_PLANE_DISTANCE_M) {
+            if (dist >= webServer.minTrackDist) {
                 double bearing   = calculateBearing(homePos.lat, homePos.lon,
                                                     planePos.lat, planePos.lon);
                 float  altDiff   = planePos.alt - homePos.alt;
@@ -155,10 +155,12 @@ void loop() {
     webServer.status.homeLon    = homePos.lon;
     webServer.status.homeAlt    = homePos.alt;
     webServer.status.homeSats   = static_cast<uint8_t>(gps.satellites.value());
-    webServer.status.planeValid = planePos.valid;
-    webServer.status.planeLat   = planePos.lat;
-    webServer.status.planeLon   = planePos.lon;
-    webServer.status.planeAlt   = planePos.alt;
+    webServer.status.planeValid   = planePos.valid;
+    webServer.status.planeLat     = planePos.lat;
+    webServer.status.planeLon     = planePos.lon;
+    webServer.status.planeAlt     = planePos.alt;
+    webServer.status.planeSpeed   = planePos.speedKmh;
+    webServer.status.planeHeading = planePos.headingDeg;
     webServer.status.panAngle   = compass.getHeading();
     webServer.status.tiltAngle  = tracker.getTiltAngle();
 
