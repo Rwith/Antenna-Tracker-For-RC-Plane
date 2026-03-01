@@ -57,10 +57,7 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
         <text x="-44" y="4"   text-anchor="middle" font-size="9" fill="#8b8fa8" font-family="monospace">W</text>
         <line id="aB" x1="0" y1="0" x2="0" y2="-50"
               stroke="#60a5fa" stroke-width="2.5" stroke-linecap="round"/>
-        <line id="aP" x1="0" y1="0" x2="0" y2="-41"
-              stroke="#4ade80" stroke-width="2" stroke-linecap="round"
-              stroke-dasharray="5 3"/>
-        <circle r="3" fill="#1a1d27" stroke="#8b8fa8" stroke-width="1.5"/>
+<circle r="3" fill="#1a1d27" stroke="#8b8fa8" stroke-width="1.5"/>
       </svg>
       <!-- Elevation gauge – side-profile quarter-arc, 0° (horizon) → 90° (zenith) -->
       <svg width="72" height="70" viewBox="-5 -65 72 70" style="display:block">
@@ -319,7 +316,7 @@ function mockData() {
 function poll() {
   const d = mockData();
   document.getElementById('ts').textContent = 'Preview – updated ' + new Date().toLocaleTimeString();
-  arrow('aB', d.bearing, 50); arrow('aP', d.panAngle, 41);
+  arrow('aB', d.bearing, 50);
   elevArrow('aTlt', d.tiltAngle, 55);
   document.getElementById('vBear').textContent = deg(d.bearing);
   document.getElementById('vPan' ).textContent = deg(d.panAngle);
