@@ -135,16 +135,29 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
     <div class="row"><span class="lbl">Max distance</span> <span class="val"      id="fsDist">--</span></div>
   </div>
 
-  <div class="card map-card">
+  <div class="card" style="grid-column:1/-1">
     <div class="ct" style="display:flex;justify-content:space-between;align-items:center">
-      <span>Live Map &nbsp;&#x25CF; <span class="ok">green</span> = tracker &nbsp;&#x25CF; <span class="info">blue</span> = plane &nbsp;&#x25CF; <span class="info">column</span> = altitude</span>
-      <button id="viewToggleBtn" onclick="toggleView()" style="background:#2a2d3a;color:#60a5fa;border:1px solid #2a2d3a;border-radius:3px;padding:1px 7px;cursor:pointer;font-family:inherit;font-size:11px">2D &#x25BC;</button>
+      <span>Live Graph</span>
+      <select id="graphMetric" onchange="switchMetric()" style="background:#0f1117;color:#e0e2ec;border:1px solid #2a2d3a;border-radius:3px;padding:2px 8px;font-family:inherit;font-size:11px;cursor:pointer">
+        <option value="speed">Speed (km/h)</option>
+        <option value="altitude">Altitude (m)</option>
+        <option value="distance">Distance (m)</option>
+        <option value="rssi">RSSI (dBm)</option>
+        <option value="lq">Link Quality (%)</option>
+        <option value="tilt">Tilt Angle (°)</option>
+      </select>
     </div>
+    <div style="position:relative;height:160px"><canvas id="liveChart"></canvas></div>
+  </div>
+
+  <div class="card map-card">
+    <div class="ct">Live Map &nbsp;&#x25CF; <span class="ok">green</span> = tracker &nbsp;&#x25CF; <span class="info">blue</span> = plane</div>
     <div id="map"></div>
   </div>
 
 </div>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
 const deg=v=>v.toFixed(1)+'°';
 const mt =v=>v.toFixed(0)+' m';
@@ -159,7 +172,7 @@ function arrow(id,a,len){
   el.setAttribute('y2',(Math.sin(r)*len).toFixed(1));
 }
 
-// ── 3D Map ────────────────────────────────────────────────────────────────
+// ── Map (MapLibre GL) ────────────────────────────────────────────────────
 const TRAIL_MAX=300;
 const trailCoords=[];
 let mapReady=false,autoFit=true;
@@ -171,33 +184,60 @@ const map=new maplibregl.Map({
       tiles:['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
              'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
              'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'],
-      attribution:'&copy; <a href="https://openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'},
-    terrain:{type:'raster-dem',encoding:'terrarium',tileSize:256,maxzoom:14,
-      tiles:['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
-      attribution:'&copy; <a href="https://www.mapzen.com/rights">Mapzen</a>, &copy; <a href="https://openstreetmap.org/copyright">OSM</a>'}
+      attribution:'&copy; <a href="https://openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'}
   },layers:[{id:'basemap',type:'raster',source:'basemap'}]},
-  center:[0,20],zoom:2,pitch:55,bearing:-15,antialias:true
+  center:[0,20],zoom:2
 });
 map.addControl(new maplibregl.NavigationControl(),'top-right');
 map.on('load',()=>{
-  map.setTerrain({source:'terrain',exaggeration:1.5});
   map.addSource('trail',{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:[]}}});
   map.addLayer({id:'trail',type:'line',source:'trail',paint:{'line-color':'#60a5fa','line-width':1.5,'line-opacity':.35}});
   map.addSource('sight',{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:[]}}});
   map.addLayer({id:'sight',type:'line',source:'sight',paint:{'line-color':'#60a5fa','line-width':1.5,'line-dasharray':[5,3],'line-opacity':.65}});
-  map.addSource('altpole',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
-  map.addLayer({id:'altpole',type:'fill-extrusion',source:'altpole',paint:{
-    'fill-extrusion-color':'#60a5fa','fill-extrusion-height':['get','alt'],
-    'fill-extrusion-base':0,'fill-extrusion-opacity':0.45}});
   mapReady=true;
 });
 map.on('dragstart zoomstart',()=>{autoFit=false;});
 function mkEl(h){const e=document.createElement('div');e.innerHTML=h;return e;}
-function poleGJ(lon,lat,alt){const d=0.00005;return{type:'FeatureCollection',features:[{
-  type:'Feature',properties:{alt:Math.max(alt,1)},
-  geometry:{type:'Polygon',coordinates:[[[lon-d,lat-d],[lon+d,lat-d],[lon+d,lat+d],[lon-d,lat+d],[lon-d,lat-d]]]}}]};}
-let is3D=true;
-function toggleView(){is3D=!is3D;map.easeTo({pitch:is3D?55:0,duration:800});document.getElementById('viewToggleBtn').innerHTML=is3D?'2D &#x25BC;':'3D &#x25B2;';}
+// ── Live graph (Chart.js) ─────────────────────────────────────────────────
+const GRAPH_MAX=120;
+const METRICS={
+  speed:    {label:'Speed',        unit:'km/h', color:'#60a5fa',fill:'rgba(96,165,250,.12)'},
+  altitude: {label:'Altitude',     unit:'m',    color:'#4ade80',fill:'rgba(74,222,128,.12)'},
+  distance: {label:'Distance',     unit:'m',    color:'#f97316',fill:'rgba(249,115,22,.12)'},
+  rssi:     {label:'RSSI',         unit:'dBm',  color:'#f87171',fill:'rgba(248,113,113,.12)'},
+  lq:       {label:'Link Quality', unit:'%',    color:'#a78bfa',fill:'rgba(167,139,250,.12)'},
+  tilt:     {label:'Tilt Angle',   unit:'°',    color:'#facc15',fill:'rgba(250,204,21,.12)'},
+};
+const gBuf={speed:[],altitude:[],distance:[],rssi:[],lq:[],tilt:[]};
+const gLbl=[];let curMetric='speed';
+Chart.defaults.color='#8b8fa8';
+const chart=new Chart(document.getElementById('liveChart'),{
+  type:'line',
+  data:{labels:gLbl,datasets:[{label:'Speed (km/h)',data:gBuf.speed,
+    borderColor:'#60a5fa',backgroundColor:'rgba(96,165,250,.12)',
+    borderWidth:1.5,pointRadius:0,tension:0.35,fill:true}]},
+  options:{animation:false,responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{mode:'index',intersect:false,
+      callbacks:{label:ctx=>ctx.parsed.y.toFixed(1)+' '+(METRICS[curMetric]||{unit:''}).unit}}},
+    scales:{
+      x:{ticks:{maxTicksLimit:8,font:{family:'Courier New',size:10}},grid:{color:'#2a2d3a'}},
+      y:{ticks:{font:{family:'Courier New',size:10}},grid:{color:'#2a2d3a'}}
+    }}});
+function switchMetric(){
+  curMetric=document.getElementById('graphMetric').value;
+  const m=METRICS[curMetric];const ds=chart.data.datasets[0];
+  ds.label=m.label+' ('+m.unit+')';ds.data=gBuf[curMetric];
+  ds.borderColor=m.color;ds.backgroundColor=m.fill;
+  chart.update('none');
+}
+function pushGraph(d){
+  const now=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  gLbl.push(now);if(gLbl.length>GRAPH_MAX)gLbl.shift();
+  const p=(k,v)=>{gBuf[k].push(v);if(gBuf[k].length>GRAPH_MAX)gBuf[k].shift();};
+  p('speed',d.planeSpeed);p('altitude',d.planeAlt);p('distance',d.distM);
+  p('rssi',d.linkRSSI);p('lq',d.linkLQ);p('tilt',d.tiltAngle);
+  chart.update('none');
+}
 
 // ── Mock data – plane orbits slowly so the trail builds up ────────────────
 const HOME_LAT = -27.4698,  HOME_LON = 153.0251;   // Brisbane area
@@ -272,28 +312,28 @@ function poll() {
   document.getElementById('fsAlt' ).textContent = d.maxAlt.toFixed(1)    + ' m';
   document.getElementById('fsAgl' ).textContent = d.maxRelAlt.toFixed(1) + ' m';
   document.getElementById('fsDist').textContent = mt(d.maxDist);
+  pushGraph(d);
   // Map
   if (mapReady) {
     if (d.homeValid) {
       if (!hMarker) {
         hMarker = new maplibregl.Marker({element: mkEl('<div style="width:13px;height:13px;border-radius:50%;background:#4ade80;border:2px solid rgba(255,255,255,.4)"></div>')})
-          .setLngLat([d.homeLon, d.homeLat, d.homeAlt])
+          .setLngLat([d.homeLon, d.homeLat])
           .setPopup(new maplibregl.Popup({offset:10}).setHTML('<b>Tracker</b><br>' + d.homeAlt.toFixed(1) + ' m MSL'))
           .addTo(map);
-      } else { hMarker.setLngLat([d.homeLon, d.homeLat, d.homeAlt]); }
+      } else { hMarker.setLngLat([d.homeLon, d.homeLat]); }
     }
     if (d.planeValid) {
       const ph = '<svg width="18" height="18" viewBox="-9 -9 18 18" style="transform:rotate(' + d.planeHeading + 'deg)"><polygon points="0,-8 5,6 0,3 -5,6" fill="#60a5fa" stroke="rgba(255,255,255,.4)" stroke-width="1.5"/></svg>';
       if (!pMarker) {
         pMarker = new maplibregl.Marker({element: mkEl(ph)})
-          .setLngLat([d.planeLon, d.planeLat, d.planeAlt])
+          .setLngLat([d.planeLon, d.planeLat])
           .setPopup(new maplibregl.Popup({offset:10}).setHTML('<b>Plane</b><br>' + d.planeAlt.toFixed(1) + ' m MSL &bull; ' + d.planeSpeed.toFixed(1) + ' km/h'))
           .addTo(map);
-      } else { pMarker.setLngLat([d.planeLon, d.planeLat, d.planeAlt]); pMarker.getElement().innerHTML = ph; }
+      } else { pMarker.setLngLat([d.planeLon, d.planeLat]); pMarker.getElement().innerHTML = ph; }
       trailCoords.push([d.planeLon, d.planeLat]);
       if (trailCoords.length > TRAIL_MAX) trailCoords.shift();
       map.getSource('trail').setData({type:'Feature',geometry:{type:'LineString',coordinates:trailCoords}});
-      map.getSource('altpole').setData(poleGJ(d.planeLon, d.planeLat, d.planeAlt));
     }
     if (d.homeValid && d.planeValid) {
       map.getSource('sight').setData({type:'Feature',geometry:{type:'LineString',coordinates:[[d.homeLon,d.homeLat],[d.planeLon,d.planeLat]]}});
