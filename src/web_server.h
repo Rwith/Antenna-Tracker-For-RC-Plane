@@ -62,7 +62,7 @@ static const char _DASH_HTML[] PROGMEM = R"rawhtml(<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Antenna Tracker</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"/>
 <style>
 :root{--bg:#0f1117;--card:#1a1d27;--border:#2a2d3a;--text:#e0e2ec;
       --dim:#8b8fa8;--green:#4ade80;--red:#f87171;--blue:#60a5fa;}
@@ -86,10 +86,12 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
      margin-right:4px;background:currentColor}
 .rose{display:flex;justify-content:center;margin-bottom:11px}
 .map-card{grid-column:1/-1}
-#map{height:340px;border-radius:6px;overflow:hidden}
-.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#1a1d27;color:#e0e2ec;border:1px solid #2a2d3a}
-.leaflet-control-attribution{background:rgba(26,29,39,.8)!important;color:#8b8fa8!important}
-.leaflet-control-attribution a{color:#60a5fa!important}
+#map{height:420px;border-radius:6px;overflow:hidden}
+.maplibregl-ctrl-attrib{background:rgba(26,29,39,.8)!important;color:#8b8fa8!important}
+.maplibregl-ctrl-attrib a,.maplibregl-ctrl-attrib button{color:#60a5fa!important;background:none!important}
+.maplibregl-popup-content{background:#1a1d27;color:#e0e2ec;border:1px solid #2a2d3a;border-radius:6px;padding:8px 12px;font-family:'Courier New',monospace;font-size:12px}
+.maplibregl-popup-tip{border-top-color:#2a2d3a}
+.maplibregl-ctrl button{background:#1a1d27!important;border-color:#2a2d3a!important}
 </style>
 </head>
 <body>
@@ -191,12 +193,15 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
   </div>
 
   <div class="card map-card">
-    <div class="ct">Live Map &nbsp;&#x25CF; <span class="ok">green</span> = tracker &nbsp;&#x25CF; <span class="info">blue</span> = plane</div>
+    <div class="ct" style="display:flex;justify-content:space-between;align-items:center">
+      <span>Live Map &nbsp;&#x25CF; <span class="ok">green</span> = tracker &nbsp;&#x25CF; <span class="info">blue</span> = plane &nbsp;&#x25CF; <span class="info">column</span> = altitude</span>
+      <button onclick="toggleView()" style="background:#2a2d3a;color:#60a5fa;border:1px solid #2a2d3a;border-radius:3px;padding:1px 7px;cursor:pointer;font-family:inherit;font-size:11px">3D &#x25B2;</button>
+    </div>
     <div id="map"></div>
   </div>
 
 </div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script>
 const deg=v=>v.toFixed(1)+'&#xB0;';
 const mt =v=>v.toFixed(0)+' m';
@@ -210,28 +215,44 @@ function arrow(id,a,len){
   el.setAttribute('x2',(Math.cos(r)*len).toFixed(1));
   el.setAttribute('y2',(Math.sin(r)*len).toFixed(1));
 }
-// ── Map ────────────────────────────────────────────────────────────────────
-const map=L.map('map').setView([20,0],2);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',{
-  attribution:'&copy; <a href="https://openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-  maxZoom:19
-}).addTo(map);
-function mkIcon(c){
-  return L.divIcon({
-    html:'<div style="width:13px;height:13px;border-radius:50%;background:'+c+';border:2px solid rgba(255,255,255,.4)"></div>',
-    iconSize:[13,13],iconAnchor:[6,6],className:''
-  });
-}
-function mkPlaneIcon(h){
-  return L.divIcon({
-    html:'<svg width="18" height="18" viewBox="-9 -9 18 18" style="transform:rotate('+h+'deg)"><polygon points="0,-8 5,6 0,3 -5,6" fill="#60a5fa" stroke="rgba(255,255,255,.4)" stroke-width="1.5"/></svg>',
-    iconSize:[18,18],iconAnchor:[9,9],className:''
-  });
-}
+// ── 3D Map (MapLibre GL) ─────────────────────────────────────────────────
 const TRAIL_MAX=300;
-const trail=[];
-let hM=null,pM=null,tL=null,trailLine=null,autoFit=true,cfgLoaded=false;
+const trailCoords=[];
+let mapReady=false,autoFit=true,cfgLoaded=false;
+let hMarker=null,pMarker=null;
+const map=new maplibregl.Map({
+  container:'map',
+  style:{version:8,sources:{
+    basemap:{type:'raster',tileSize:256,
+      tiles:['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+             'https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+             'https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'],
+      attribution:'&copy; <a href="https://openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'},
+    terrain:{type:'raster-dem',encoding:'terrarium',tileSize:256,maxzoom:14,
+      tiles:['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+      attribution:'&copy; <a href="https://www.mapzen.com/rights">Mapzen</a>, &copy; <a href="https://openstreetmap.org/copyright">OSM</a>'}
+  },layers:[{id:'basemap',type:'raster',source:'basemap'}]},
+  center:[0,20],zoom:2,pitch:55,bearing:-15,antialias:true
+});
+map.addControl(new maplibregl.NavigationControl(),'top-right');
+map.on('load',()=>{
+  map.setTerrain({source:'terrain',exaggeration:1.5});
+  map.addSource('trail',{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:[]}}});
+  map.addLayer({id:'trail',type:'line',source:'trail',paint:{'line-color':'#60a5fa','line-width':1.5,'line-opacity':.35}});
+  map.addSource('sight',{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',coordinates:[]}}});
+  map.addLayer({id:'sight',type:'line',source:'sight',paint:{'line-color':'#60a5fa','line-width':1.5,'line-dasharray':[5,3],'line-opacity':.65}});
+  map.addSource('altpole',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+  map.addLayer({id:'altpole',type:'fill-extrusion',source:'altpole',paint:{
+    'fill-extrusion-color':'#60a5fa','fill-extrusion-height':['get','alt'],
+    'fill-extrusion-base':0,'fill-extrusion-opacity':0.45}});
+  mapReady=true;
+});
 map.on('dragstart zoomstart',()=>{autoFit=false;});
+function mkEl(h){const e=document.createElement('div');e.innerHTML=h;return e;}
+function poleGJ(lon,lat,alt){const d=0.00005;return{type:'FeatureCollection',features:[{
+  type:'Feature',properties:{alt:Math.max(alt,1)},
+  geometry:{type:'Polygon',coordinates:[[[lon-d,lat-d],[lon+d,lat-d],[lon+d,lat+d],[lon-d,lat+d],[lon-d,lat-d]]]}}]};}
+function toggleView(){map.easeTo({pitch:map.getPitch()>10?0:55,duration:800});}
 // ──────────────────────────────────────────────────────────────────────────
 async function poll(){
   try{
@@ -279,30 +300,29 @@ async function poll(){
     document.getElementById('fsAlt' ).textContent=d.maxAlt.toFixed(1)+' m';
     document.getElementById('fsAgl' ).textContent=d.maxRelAlt.toFixed(1)+' m';
     document.getElementById('fsDist').textContent=mt(d.maxDist);
-    // ── Map markers ──────────────────────────────────────────────────────────
-    if(d.homeValid){
-      if(!hM){hM=L.marker([d.homeLat,d.homeLon],{icon:mkIcon('#4ade80')})
-        .bindPopup('<b>Tracker</b><br>'+d.homeAlt.toFixed(1)+' m MSL').addTo(map);}
-      else hM.setLatLng([d.homeLat,d.homeLon]);
-    }
-    if(d.planeValid){
-      const pc='<b>Plane</b><br>'+d.planeAlt.toFixed(1)+' m MSL &bull; '+d.planeSpeed.toFixed(1)+' km/h';
-      const pi=mkPlaneIcon(d.planeHeading);
-      if(!pM){pM=L.marker([d.planeLat,d.planeLon],{icon:pi}).bindPopup(pc).addTo(map);}
-      else{pM.setLatLng([d.planeLat,d.planeLon]).setIcon(pi);pM.getPopup().setContent(pc);}
-      trail.push([d.planeLat,d.planeLon]);
-      if(trail.length>TRAIL_MAX)trail.shift();
-      if(trail.length>1){
-        if(!trailLine){trailLine=L.polyline(trail,{color:'#60a5fa',weight:1,opacity:.25,interactive:false}).addTo(map);trailLine.bringToBack();}
-        else trailLine.setLatLngs(trail);
+    // ── Map ────────────────────────────────────────────────────────────────────
+    if(mapReady){
+      if(d.homeValid){
+        if(!hMarker){hMarker=new maplibregl.Marker({element:mkEl('<div style="width:13px;height:13px;border-radius:50%;background:#4ade80;border:2px solid rgba(255,255,255,.4)"></div>')})
+          .setLngLat([d.homeLon,d.homeLat]).setPopup(new maplibregl.Popup({offset:10}).setHTML('<b>Tracker</b><br>'+d.homeAlt.toFixed(1)+' m MSL')).addTo(map);}
+        else hMarker.setLngLat([d.homeLon,d.homeLat]);
       }
+      if(d.planeValid){
+        const ph='<svg width="18" height="18" viewBox="-9 -9 18 18" style="transform:rotate('+d.planeHeading+'deg)"><polygon points="0,-8 5,6 0,3 -5,6" fill="#60a5fa" stroke="rgba(255,255,255,.4)" stroke-width="1.5"/></svg>';
+        if(!pMarker){pMarker=new maplibregl.Marker({element:mkEl(ph)})
+          .setLngLat([d.planeLon,d.planeLat]).setPopup(new maplibregl.Popup({offset:10}).setHTML('<b>Plane</b><br>'+d.planeAlt.toFixed(1)+' m MSL &bull; '+d.planeSpeed.toFixed(1)+' km/h')).addTo(map);}
+        else{pMarker.setLngLat([d.planeLon,d.planeLat]);pMarker.getElement().innerHTML=ph;}
+        trailCoords.push([d.planeLon,d.planeLat]);
+        if(trailCoords.length>TRAIL_MAX)trailCoords.shift();
+        map.getSource('trail').setData({type:'Feature',geometry:{type:'LineString',coordinates:trailCoords}});
+        map.getSource('altpole').setData(poleGJ(d.planeLon,d.planeLat,d.planeAlt));
+      }
+      if(d.homeValid&&d.planeValid){
+        map.getSource('sight').setData({type:'Feature',geometry:{type:'LineString',coordinates:[[d.homeLon,d.homeLat],[d.planeLon,d.planeLat]]}});
+        if(autoFit)map.fitBounds([[Math.min(d.homeLon,d.planeLon)-.002,Math.min(d.homeLat,d.planeLat)-.002],
+                                   [Math.max(d.homeLon,d.planeLon)+.002,Math.max(d.homeLat,d.planeLat)+.002]],{padding:60,maxZoom:16});
+      }else if(d.homeValid&&autoFit){map.flyTo({center:[d.homeLon,d.homeLat],zoom:14});}
     }
-    if(d.homeValid&&d.planeValid){
-      const pts=[[d.homeLat,d.homeLon],[d.planeLat,d.planeLon]];
-      if(!tL){tL=L.polyline(pts,{color:'#60a5fa',weight:1.5,dashArray:'6 4',opacity:.65}).addTo(map);}
-      else tL.setLatLngs(pts);
-      if(autoFit)map.fitBounds(pts,{padding:[40,40],maxZoom:16});
-    }else if(d.homeValid&&autoFit){map.setView([d.homeLat,d.homeLon],14);}
   }catch(e){
     document.getElementById('ts').textContent='&#x26A0; No response \u2013 retrying\u2026';
   }
