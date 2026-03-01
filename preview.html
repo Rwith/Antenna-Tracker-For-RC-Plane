@@ -241,31 +241,53 @@ function pushGraph(d){
   chart.update('none');
 }
 
-// ── Mock data – plane orbits slowly so the trail builds up ────────────────
-const HOME_LAT = -27.4698,  HOME_LON = 153.0251;   // Brisbane area
+// ── Mock data – racetrack flight pattern ─────────────────────────────────
+const HOME_LAT = -27.4698, HOME_LON = 153.0251;
+const M2LAT = 1 / 111320;
+const M2LON = 1 / (111320 * Math.cos(HOME_LAT * Math.PI / 180));
 let tick = 0;
 function mockData() {
   tick++;
-  const angle  = tick * 3 * Math.PI / 180;          // 3° per second
-  const radius = 0.008;                              // ~890 m orbit
-  const pLat   = HOME_LAT + Math.sin(angle) * radius;
-  const pLon   = HOME_LON + Math.cos(angle) * radius;
-  const pAlt   = 95 + Math.sin(angle * 0.7) * 25;   // 70–120 m MSL
-  const hdg    = (Math.atan2(-Math.sin(angle), Math.cos(angle)) * 180 / Math.PI + 360) % 360;
-  const dLat   = pLat - HOME_LAT, dLon = pLon - HOME_LON;
-  const dist   = Math.sqrt(dLat*dLat + dLon*dLon) * 111320;
-  const bear   = (Math.atan2(dLon, dLat) * 180 / Math.PI + 360) % 360;
-  const pan    = (bear + (Math.random() - 0.5) * 2) % 360;
-  const elev   = Math.atan2(pAlt - 32, dist) * 180 / Math.PI;
+  // Racetrack: 1300 m straights (E-W), 220 m radius turns at each end
+  // Home sits at the centre of the pattern
+  const S = 650, R = 220, SPEED = 26; // metres
+  const seg1 = 2*S, seg2 = seg1 + Math.PI*R, seg3 = seg2 + 2*S, lap = seg3 + Math.PI*R;
+  const d = (tick * SPEED) % lap;
+  let x, y, hdg; // x = east offset (m), y = north offset (m) from HOME
+  if (d < seg1) {
+    // Bottom straight – heading east
+    x = -S + d;  y = -R;  hdg = 90;
+  } else if (d < seg2) {
+    // East semicircle – CCW, centre = (S, 0)
+    const φ = -Math.PI/2 + (d - seg1) / R;
+    x = S + R*Math.cos(φ);  y = R*Math.sin(φ);
+    hdg = (Math.atan2(-Math.sin(φ), Math.cos(φ)) * 180/Math.PI + 360) % 360;
+  } else if (d < seg3) {
+    // Top straight – heading west
+    x = S - (d - seg2);  y = R;  hdg = 270;
+  } else {
+    // West semicircle – CCW, centre = (-S, 0)
+    const φ = Math.PI/2 + (d - seg3) / R;
+    x = -S + R*Math.cos(φ);  y = R*Math.sin(φ);
+    hdg = (Math.atan2(-Math.sin(φ), Math.cos(φ)) * 180/Math.PI + 360) % 360;
+  }
+  const pLat = HOME_LAT + y * M2LAT;
+  const pLon = HOME_LON + x * M2LON;
+  const pAlt = 90 + Math.sin(tick * 2 * Math.PI / 120) * 20; // gentle 2-min altitude cycle
+  const dist = Math.sqrt(x*x + y*y);
+  const bear = (Math.atan2(x, y) * 180/Math.PI + 360) % 360;
+  const pan  = (bear + (Math.random() - 0.5) * 2) % 360;
+  const elev = Math.atan2(pAlt - 32, dist) * 180/Math.PI;
+  const inTurn = (d >= seg1 && d < seg2) || d >= seg3;
   return {
     homeValid:true, homeLat:HOME_LAT, homeLon:HOME_LON, homeAlt:32.0, homeSats:11,
     planeValid:true, planeLat:pLat, planeLon:pLon, planeAlt:pAlt,
-    planeSpeed:94.7, planeHeading:hdg,
+    planeSpeed: SPEED * (inTurn ? 0.88 : 1.05) * 3.6, planeHeading:hdg,
     tracking:true, bearing:bear, elevation:elev, distM:dist,
     panAngle:pan, tiltAngle:elev,
     homeGpsOk:true, crsfOk:true, minTrackDist:5,
-    linkRSSI:-61, linkLQ:98, linkSNR:6, linkTxPwr:3, linkRfMode:2, linkValid:true,
-    maxSpeed:112.3, maxAlt:120.4, maxRelAlt:88.4, maxDist:1340,
+    linkRSSI: Math.round(-61 - dist/80), linkLQ:98, linkSNR:6, linkTxPwr:3, linkRfMode:2, linkValid:true,
+    maxSpeed:102.3, maxAlt:120.4, maxRelAlt:88.4, maxDist:Math.max(1340, Math.round(dist)),
     flightMs: 847000 + tick * 1000
   };
 }
