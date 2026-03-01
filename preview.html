@@ -251,8 +251,7 @@ function mockData() {
   const pLat   = HOME_LAT + Math.sin(angle) * radius;
   const pLon   = HOME_LON + Math.cos(angle) * radius;
   const pAlt   = 95 + Math.sin(angle * 0.7) * 25;   // 70–120 m MSL
-  const hdg    = ((Math.atan2(Math.cos(angle)*radius, Math.sin(angle)*radius)
-                   * 180 / Math.PI) + 360) % 360;
+  const hdg    = (Math.atan2(-Math.sin(angle), Math.cos(angle)) * 180 / Math.PI + 360) % 360;
   const dLat   = pLat - HOME_LAT, dLon = pLon - HOME_LON;
   const dist   = Math.sqrt(dLat*dLat + dLon*dLon) * 111320;
   const bear   = (Math.atan2(dLon, dLat) * 180 / Math.PI + 360) % 360;
