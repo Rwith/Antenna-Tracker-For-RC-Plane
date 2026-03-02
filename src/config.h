@@ -11,7 +11,7 @@
 // This module has a SINGLE "CRSF Serial Port" pin (half-duplex).
 // Wire that pin → ESP32 GPIO18 (RX only).  No TX wire is needed for telemetry.
 // Power the module via its XT30 plug (7–13 V LiPo) – not from ESP32 pins.
-#define CRSF_RX_PIN  18    // ESP32-S3 GPIO18 ← ELRS "CRSF Serial Port" pin
+#define CRSF_RX_PIN  16    // ESP32-S3 GPIO16 ← ELRS "CRSF Serial Port" pin
 #define CRSF_BAUD    420000  // CRSF standard baud rate – do not change
 
 // ─── Servo Signal Pins ────────────────────────────────────────────────────────
