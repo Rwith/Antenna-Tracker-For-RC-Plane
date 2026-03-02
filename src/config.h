@@ -5,7 +5,7 @@
 // NEO-6M GPS module (UART1)
 #define GPS_RX_PIN   44    // ESP32 GPIO44 (board RX pin) ← NEO-6M TX
 #define GPS_TX_PIN   43    // ESP32 GPIO43 (board TX pin) → NEO-6M RX  (optional if read-only)
-#define GPS_BAUD     9600
+#define GPS_BAUD     115200
 
 // BetaFPV ELRS 868/915 MHz Micro TX V2 – CRSF protocol (UART2)
 // This module has a SINGLE "CRSF Serial Port" pin (half-duplex).
