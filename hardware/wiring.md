@@ -6,7 +6,7 @@
 |---|-----------|---------|
 | 1 | ESP32 DevKit v1 (38-pin) | Main controller |
 | 2 | NEO-6M GPS module | Ground-station position |
-| 3 | BetaFPV ELRS 915 MHz backpack | Receives CRSF GPS telemetry from plane |
+| 3 | BetaFPV ELRS 868/915 MHz Micro TX V2 | Receives CRSF GPS telemetry from plane |
 | 4 | QMC5883L magnetometer | Pan (azimuth) position feedback |
 | 5 | 360° continuous servo | Pan axis |
 | 6 | 180° standard servo | Tilt axis (direct angle control – no sensor needed) |
@@ -29,24 +29,19 @@ All pin numbers match the defaults in `src/config.h`.  Change the `#define`s the
 
 > The NEO-6M outputs NMEA sentences at 9600 baud by default.
 
-### UART – BetaFPV ELRS 915 MHz Backpack (UART2)
+### UART – BetaFPV ELRS 868/915 MHz Micro TX V2 (UART2)
 
-The ELRS backpack outputs **CRSF protocol** at **420,000 baud**.
-Signal is **non-inverted 3.3 V logic** – connect directly to the ESP32, no level shifter needed.
+The module exposes a **single "CRSF Serial Port" pin** (half-duplex, 3.3 V logic).
+One wire is all that is needed for telemetry reception.
+CRSF runs at **420,000 baud** – `CRSF_BAUD` in `config.h` must not be changed.
 
-| ESP32 GPIO | ELRS backpack pin | Wire colour (suggestion) |
-|------------|-------------------|--------------------------|
-| GPIO 18 (RX2) | TX (backpack → ESP32) | Green |
-| GPIO 19 (TX2) | RX (ESP32 → backpack) | Yellow (optional) |
-| 5 V or 3.3 V | VCC (check your module's rating) | Red |
+| ESP32 GPIO | Module pin | Wire colour (suggestion) |
+|------------|-----------|--------------------------|
+| GPIO 18 (RX2) | CRSF Serial Port | Green |
 | GND | GND | Black |
 
-> CRSF baud rate is fixed at 420,000 – `CRSF_BAUD` in `config.h` must not be changed.
-
-**Where to find the TX pin on the BetaFPV ELRS backpack:**
-The backpack exposes a UART header (often labelled `T` / `R` or `TX` / `RX`).
-Connect the backpack's `TX` pin to ESP32 `GPIO 18`.  That is the only wire
-required for receive-only telemetry.
+> **Power:** Connect the module via its **XT30 plug** to a 2S–3S LiPo (7–13 V).
+> Do **not** wire its power rail to the ESP32 3.3 V or 5 V pins.
 
 ### I2C – QMC5883L Compass
 
@@ -83,10 +78,9 @@ I2C address (fixed in hardware): QMC5883L → **0x0D**
              ────VCC────│3.3V                            │  │
              ────GND────│GND                             │  │
                         │                                │  │
- ELRS Backpack───TX────▶│GPIO18       ┌──────────────────┘  │
-              ◀──RX─────│GPIO19       │  I2C bus             │
-              ────VCC───│3.3V/5V      │                      │
-              ────GND───│GND          └─── QMC5883L (0x0D)  │
+ ELRS TX──CRSF─────────▶│GPIO18       ┌──────────────────┘  │
+          GND───────────│GND          │  I2C bus             │
+          (XT30 → LiPo) │             └─── QMC5883L (0x0D)  │
                         │                                  │
  Pan Servo ──signal─────│GPIO25  (360° continuous)         │
  Tilt Servo ─signal─────│GPIO26  (180° positional)         │

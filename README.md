@@ -24,7 +24,7 @@ An open-source ESP32 firmware that automatically points a directional antenna to
 ```
 
 1. The **NEO-6M GPS** gives the tracker's own position.
-2. The **BetaFPV ELRS 915 MHz backpack** receives CRSF `GPS` frames (frame type 0x02) from the plane's ELRS receiver at 420,000 baud.
+2. The **BetaFPV ELRS 868/915 MHz backpack** receives CRSF `GPS` frames (frame type 0x02) from the plane's ELRS receiver at 420,000 baud.
 3. The firmware computes the required **bearing** (azimuth) and **elevation angle**.
 4. A **QMC5883L magnetometer** on the pan platform provides the current heading for the pan P-controller.
 5. The **180° tilt servo** moves directly to the commanded elevation angle — no IMU or sensor required.
@@ -37,7 +37,7 @@ An open-source ESP32 firmware that automatically points a directional antenna to
 |-----------|-------|
 | ESP32 DevKit (any 38-pin) | |
 | NEO-6M GPS module | Ground station position |
-| BetaFPV ELRS 915 MHz backpack | CRSF GPS telemetry from plane |
+| BetaFPV ELRS 868/915 MHz backpack | CRSF GPS telemetry from plane |
 | QMC5883L magnetometer | Pan / azimuth feedback |
 | 360° continuous-rotation servo | Pan axis |
 | 180° standard servo | Tilt axis (direct angle control) |
@@ -108,7 +108,7 @@ Expected output once running:
 [OK]    Servos attached.
 [INFO]  Waiting for home GPS fix (need ≥4 satellites)...
 [HOME]  GPS locked: 51.5074000, -0.1278000  alt=12.3 m  sats=8
-[TRACK] dist=342m  bearing=247.3°  elev=8.1°  pan=246.8°
+[TRACK] dist=342m  bearing=247.3°  elev=8.1°  pan=246.8°  tilt=8.1°
 ```
 
 ---
@@ -124,11 +124,11 @@ Quick summary:
 | 16 (RX1) | NEO-6M TX |
 | 17 (TX1) | NEO-6M RX |
 | 18 (RX2) | ELRS backpack TX (CRSF) |
-| 19 (TX2) | ELRS backpack RX (optional) |
-| 21 (SDA) | QMC5883L SDA |
-| 22 (SCL) | QMC5883L SCL |
-| 25 | Pan servo signal (360°) |
-| 26 | Tilt servo signal (180°) |
+| 21 (TX2) | ELRS backpack RX (optional) |
+| 8 (SDA) | QMC5883L SDA |
+| 9 (SCL) | QMC5883L SCL |
+| 40 | Pan servo signal (360°) |
+| 41 | Tilt servo signal (180°) |
 
 ---
 
@@ -181,14 +181,14 @@ Pan axis gains are in `src/config.h`. The tilt axis requires no tuning — the 1
 
 ## ELRS / CRSF Compatibility
 
-The tracker reads **CRSF GPS frames** (frame type `0x02`) delivered by the **BetaFPV ELRS 915 MHz backpack** via UART at **420,000 baud**.
+The tracker reads **CRSF GPS frames** (frame type `0x02`) delivered by the **BetaFPV ELRS 868/915 MHz backpack** via UART at **420,000 baud**.
 
 ### Plane-side setup (ArduPilot / Betaflight)
 The ELRS receiver on the plane must be configured to forward GPS telemetry back over the RC link.  In ArduPilot, enable CRSF telemetry on the serial port connected to the ELRS RX:
 ```
 SERIALx_PROTOCOL = 23   (RCIN)
 ```
-ArduPilot will automatically send GPS, attitude, and battery frames to the ELRS RX, which relays them through the 915 MHz link to your backpack on the ground.
+ArduPilot will automatically send GPS, attitude, and battery frames to the ELRS RX, which relays them through the ELRS link to your TX module on the ground.
 
 ### What data is used
 | CRSF frame | Type | Used for |

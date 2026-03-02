@@ -15,7 +15,10 @@
 //   PWM = SERVO_STOP → stopped
 //
 // Tilt axis – 180° standard positional servo (angle-controlled)
-//   No feedback needed; the servo moves directly to the commanded elevation.
+//   No IMU or external sensor required.  Because we command the servo to a
+//   specific PWM value, the resulting angle is fully determined by that value.
+//   getTiltAngle() reverses the linear PWM→angle mapping to report the current
+//   tilt angle without any additional hardware.
 //   TILT_MIN_PWM µs → MIN_TILT_DEG (antenna horizontal)
 //   TILT_MAX_PWM µs → MAX_TILT_DEG (antenna near-vertical)
 //   Both endpoints are configurable in config.h.
@@ -48,6 +51,11 @@ public:
         _writePan(SERVO_STOP);
         // 180° servo holds position passively – no explicit stop needed
     }
+
+    // Returns the current tilt elevation in degrees, derived from the last
+    // commanded PWM.  No IMU or sensor needed – the 180° servo's position is
+    // fully determined by the PWM we sent it.
+    float getTiltAngle() const { return _targetTilt; }
 
 private:
     Servo _panServo;

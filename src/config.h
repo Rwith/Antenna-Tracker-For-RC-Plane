@@ -7,16 +7,17 @@
 #define GPS_TX_PIN   17    // ESP32 GPIO17 → NEO-6M RX  (optional if read-only)
 #define GPS_BAUD     9600
 
-// BetaFPV ELRS 915 MHz backpack – CRSF protocol (UART2)
-// Connect ELRS TX module's TX pin → ESP32 RX pin (non-inverted, 3.3 V logic)
-#define CRSF_RX_PIN  18    // ESP32 GPIO18 ← ELRS backpack TX
-#define CRSF_TX_PIN  19    // ESP32 GPIO19 → ELRS backpack RX  (optional)
+// BetaFPV ELRS 868/915 MHz Micro TX V2 – CRSF protocol (UART2)
+// This module has a SINGLE "CRSF Serial Port" pin (half-duplex).
+// Wire that pin → ESP32 GPIO18 (RX only).  No TX wire is needed for telemetry.
+// Power the module via its XT30 plug (7–13 V LiPo) – not from ESP32 pins.
+#define CRSF_RX_PIN  18    // ESP32-S3 GPIO18 ← ELRS "CRSF Serial Port" pin
 #define CRSF_BAUD    420000  // CRSF standard baud rate – do not change
 
 // ─── Servo Signal Pins ────────────────────────────────────────────────────────
 
-#define PAN_SERVO_PIN   25   // Azimuth (left/right) servo signal
-#define TILT_SERVO_PIN  26   // Elevation (up/down) servo signal
+#define PAN_SERVO_PIN   40   // Azimuth (left/right) servo signal
+#define TILT_SERVO_PIN  41   // Elevation (up/down) servo signal
 
 // ─── 360° Continuous Servo PWM Calibration (microseconds) ────────────────────
 // 360° servos respond to SPEED, not position:
@@ -31,9 +32,11 @@
 #define SERVO_MAX_CCW  1100   // µs – full counter-clockwise speed
 
 // ─── I2C Bus ──────────────────────────────────────────────────────────────────
+// ESP32-S3 DevKitC-1 default I2C pins.
+// Adjust if your board breaks these out differently.
 
-#define I2C_SDA_PIN  21
-#define I2C_SCL_PIN  22
+#define I2C_SDA_PIN  8
+#define I2C_SCL_PIN  9
 
 // ─── Pan Axis – 360° Continuous Servo P-Controller ───────────────────────────
 // Increase PAN_KP if tracking is sluggish; decrease if the pan oscillates.
@@ -64,6 +67,14 @@
 #define MIN_PLANE_DISTANCE_M   5.0f   // ignore plane if closer than this (m)
                                       // prevents wild spinning when on the ground
 
+// ─── WiFi (web dashboard) ─────────────────────────────────────────────────────
+// The ESP32 hosts a live status page at http://<ip>/ once connected.
+// Set WIFI_SSID / WIFI_PASSWORD to your network credentials.
+// If the connection fails the tracker still operates normally.
+#define WIFI_SSID        "your-network-name"
+#define WIFI_PASSWORD    "your-password"
+#define WIFI_TIMEOUT_MS  15000   // ms to wait for association before giving up
+
 // ─── Compass (QMC5883L) Calibration ─────────────────────────────────────────
 // Run a compass calibration (rotate tracker 360°) to find hard-iron offsets.
 // Uncalibrated values will work but may have a few degrees of error.
@@ -72,4 +83,4 @@
 
 // Magnetic declination for your location (degrees, + East / – West).
 // Look up your value at: https://www.magnetic-declination.com
-#define COMPASS_DECLINATION  0.0f
+#define COMPASS_DECLINATION  11.0f
