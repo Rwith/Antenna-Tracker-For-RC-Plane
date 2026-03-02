@@ -40,6 +40,7 @@ static FlightAccum fStats;
 // ─── Setup ────────────────────────────────────────────────────────────────────
 void setup() {
     Serial.begin(115200);
+    delay(200);  // let USB-UART settle before first print
     Serial.println("\n[TRACKER] Antenna Tracker starting...");
 
     // I2C bus (compass only)
@@ -54,6 +55,7 @@ void setup() {
     // Compass (pan feedback)
     if (!compass.begin()) {
         Serial.println("[ERROR] QMC5883L not found – check I2C wiring (SDA/SCL) and VCC.");
+        Serial.flush();
         while (true) delay(1000);
     }
     Serial.println("[OK]    QMC5883L compass ready.");
