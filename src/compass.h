@@ -37,12 +37,17 @@ public:
         _writeReg(REG_CTRL2, 0x40u);
 
         delay(10);
+        _ready = true;
         return true;
     }
 
+    bool isReady() const { return _ready; }
+
     // Returns compass heading in degrees [0, 360)
     // 0° = North, 90° = East, 180° = South, 270° = West
+    // Returns 0.0 without touching the I2C bus if begin() failed.
     float getHeading() {
+        if (!_ready) return 0.0f;
         int16_t x, y, z;
         _readRaw(x, y, z);
 
@@ -61,6 +66,8 @@ public:
     }
 
 private:
+    bool _ready = false;
+
     static constexpr uint8_t QMC_ADDR     = 0x0Du;
     static constexpr uint8_t REG_DATA     = 0x00u;  // first data register (X_LSB)
     static constexpr uint8_t REG_CTRL1    = 0x09u;
