@@ -83,4 +83,4 @@
 
 // Magnetic declination for your location (degrees, + East / – West).
 // Look up your value at: https://www.magnetic-declination.com
-#define COMPASS_DECLINATION  0.0f
+#define COMPASS_DECLINATION  11.0f
