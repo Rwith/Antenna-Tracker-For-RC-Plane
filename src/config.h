@@ -9,11 +9,10 @@
 
 // BetaFPV ELRS 868/915 MHz Micro TX V2 – AirPort mode (transparent serial bridge)
 // Enable "Use as AirPort Serial device" in the ELRS web UI and set baud to 460800.
-// Wire the ELRS CRSF/Serial pin → ESP32 GPIO16 (RX) and GPIO17 (TX).
+// Wire the ELRS CRSF/Serial pin → ESP32 GPIO16 (RX only – no TX wire needed).
 // The module must also be bound to the plane's ELRS receiver.
 // Power via the module's own supply (XT30 or USB-C) – not from ESP32 pins.
-#define AIRPORT_RX_PIN  16    // ESP32-S3 GPIO16 ← ELRS Serial pin
-#define AIRPORT_TX_PIN  17    // ESP32-S3 GPIO17 → ELRS Serial pin
+#define AIRPORT_RX_PIN  16    // ESP32-S3 GPIO16 ← ELRS Serial pin (RX only)
 #define AIRPORT_BAUD    460800  // AirPort UART baud – must match ELRS web UI
 
 // ─── Servo Signal Pins ────────────────────────────────────────────────────────

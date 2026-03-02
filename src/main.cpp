@@ -48,8 +48,8 @@ void setup() {
     // NEO-6M GPS
     gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
 
-    // BetaFPV ELRS – AirPort mode (transparent MAVLink bridge), full-duplex
-    airportSerial.begin(AIRPORT_BAUD, SERIAL_8N1, AIRPORT_RX_PIN, AIRPORT_TX_PIN);
+    // BetaFPV ELRS – AirPort mode (transparent MAVLink bridge), RX only
+    airportSerial.begin(AIRPORT_BAUD, SERIAL_8N1, AIRPORT_RX_PIN, -1);
 
     // Compass (pan feedback)
     if (!compass.begin()) {
