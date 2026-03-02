@@ -31,9 +31,11 @@
 #define SERVO_MAX_CCW  1100   // µs – full counter-clockwise speed
 
 // ─── I2C Bus ──────────────────────────────────────────────────────────────────
+// ESP32-S3 DevKitC-1 default I2C pins.
+// Adjust if your board breaks these out differently.
 
-#define I2C_SDA_PIN  21
-#define I2C_SCL_PIN  22
+#define I2C_SDA_PIN  8
+#define I2C_SCL_PIN  9
 
 // ─── Pan Axis – 360° Continuous Servo P-Controller ───────────────────────────
 // Increase PAN_KP if tracking is sluggish; decrease if the pan oscillates.

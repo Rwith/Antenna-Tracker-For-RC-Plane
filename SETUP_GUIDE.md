@@ -81,12 +81,12 @@ Wire everything according to the table below. All pin numbers can be changed in 
 | VCC | 3.3 V or 5 V | Check your module's rating |
 | GND | GND | |
 
-### QMC5883L Compass → ESP32 (I2C)
+### QMC5883L Compass → ESP32-S3 (I2C)
 
-| QMC5883L | ESP32 GPIO | Notes |
-|----------|-----------|-------|
-| SDA | **GPIO 21** | Add 4.7 kΩ pull-up to 3.3 V if not on board |
-| SCL | **GPIO 22** | Add 4.7 kΩ pull-up to 3.3 V if not on board |
+| QMC5883L | ESP32-S3 GPIO | Notes |
+|----------|--------------|-------|
+| SDA | **GPIO 8** | Add 4.7 kΩ pull-up to 3.3 V if not on board |
+| SCL | **GPIO 9** | Add 4.7 kΩ pull-up to 3.3 V if not on board |
 | VCC | 3.3 V | |
 | GND | GND | |
 
@@ -103,10 +103,10 @@ Wire everything according to the table below. All pin numbers can be changed in 
 
 ```
                     ┌──────────────────────────────────┐
-                    │           ESP32 DevKit            │
+                    │         ESP32-S3 DevKitC-1        │
                     │                                  │
-NEO-6M GPS ─TX────▶│GPIO16  GPIO21──SDA──┐            │
-           ◀RX─────│GPIO17  GPIO22──SCL──┤            │
+NEO-6M GPS ─TX────▶│GPIO16  GPIO8───SDA──┐            │
+           ◀RX─────│GPIO17  GPIO9───SCL──┤            │
            ──VCC───│3.3V               QMC5883L        │
            ──GND───│GND                               │
                     │                                  │
