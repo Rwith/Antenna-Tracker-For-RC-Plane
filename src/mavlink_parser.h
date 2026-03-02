@@ -33,12 +33,14 @@
 //   26      2     hdg           (uint16, centi-degrees, 0=North)
 
 struct PlaneGPS {
-    double   lat;         // degrees
-    double   lon;         // degrees
-    float    alt;         // metres, MSL
-    float    relAlt;      // metres above home / takeoff point
-    bool     valid;
-    uint32_t lastUpdate;  // millis() timestamp of last good packet
+    double   lat        = 0.0;    // degrees
+    double   lon        = 0.0;    // degrees
+    float    alt        = 0.0f;   // metres, MSL
+    float    relAlt     = 0.0f;   // metres above home / takeoff point
+    float    speedKmh   = 0.0f;   // groundspeed (km/h), derived from vx/vy
+    float    headingDeg = 0.0f;   // true heading (degrees, 0 = North)
+    bool     valid      = false;
+    uint32_t lastUpdate = 0;      // millis() timestamp of last good packet
 };
 
 class MAVLinkParser {
@@ -153,16 +155,29 @@ private:
     }
 
     void _decodeGlobalPositionInt(PlaneGPS &out) {
-        int32_t lat, lon, alt, relAlt;
+        int32_t  lat, lon, alt, relAlt;
+        int16_t  vx, vy;
+        uint16_t hdg;
         memcpy(&lat,    _payload + 4,  4);
         memcpy(&lon,    _payload + 8,  4);
         memcpy(&alt,    _payload + 12, 4);
         memcpy(&relAlt, _payload + 16, 4);
+        memcpy(&vx,     _payload + 20, 2);   // cm/s north
+        memcpy(&vy,     _payload + 22, 2);   // cm/s east
+        memcpy(&hdg,    _payload + 26, 2);   // centi-degrees (0=North, 36000=unknown)
 
         out.lat        = static_cast<double>(lat) * 1e-7;
         out.lon        = static_cast<double>(lon) * 1e-7;
         out.alt        = static_cast<float>(alt)    * 0.001f;
         out.relAlt     = static_cast<float>(relAlt) * 0.001f;
+        // groundspeed in km/h from north/east velocity components (cm/s → km/h = × 0.036)
+        float vn = static_cast<float>(vx);
+        float ve = static_cast<float>(vy);
+        out.speedKmh   = sqrtf(vn * vn + ve * ve) * 0.036f;
+        // heading: 36000 means unknown in MAVLink; keep previous value in that case
+        if (hdg != 36000u) {
+            out.headingDeg = static_cast<float>(hdg) * 0.01f;
+        }
         out.valid      = true;
         out.lastUpdate = millis();
     }

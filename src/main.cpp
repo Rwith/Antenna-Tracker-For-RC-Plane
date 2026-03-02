@@ -4,27 +4,26 @@
 #include <TinyGPSPlus.h>
 
 #include "config.h"
-#include "crsf_parser.h"
+#include "mavlink_parser.h"
 #include "compass.h"
 #include "tracker_math.h"
 #include "servo_controller.h"
 #include "web_server.h"
 
 // ─── Hardware serial ports ────────────────────────────────────────────────────
-HardwareSerial gpsSerial(1);   // UART1 → NEO-6M GPS
-HardwareSerial elrsSerial(2);  // UART2 → BetaFPV ELRS 868 MHz Micro TX V2 (CRSF)
+HardwareSerial gpsSerial(1);    // UART1 → NEO-6M GPS
+HardwareSerial airportSerial(2); // UART2 → BetaFPV ELRS (AirPort transparent bridge)
 
 // ─── Component instances ──────────────────────────────────────────────────────
-TinyGPSPlus     gps;
-CRSFParser      crsfParser(elrsSerial);
-Compass         compass;
-ServoController tracker;
+TinyGPSPlus      gps;
+MAVLinkParser    mavParser(airportSerial);
+Compass          compass;
+ServoController  tracker;
 TrackerWebServer webServer;
 
 // ─── State ────────────────────────────────────────────────────────────────────
-PlaneGPS  planePos  = {};   // zero-init; valid=false by default
-HomeGPS   homePos   = { 0, 0, 0, false };
-LinkStats linkStats = {};
+PlaneGPS  planePos = {};   // zero-init; valid=false by default
+HomeGPS   homePos  = { 0, 0, 0, false };
 
 struct FlightAccum {
     float    maxSpeedKmh = 0.0f;
@@ -49,8 +48,8 @@ void setup() {
     // NEO-6M GPS
     gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
 
-    // BetaFPV ELRS 868 MHz Micro TX V2 – single CRSF pin, RX only
-    elrsSerial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_RX_PIN, -1);
+    // BetaFPV ELRS – AirPort mode (transparent MAVLink bridge), full-duplex
+    airportSerial.begin(AIRPORT_BAUD, SERIAL_8N1, AIRPORT_RX_PIN, AIRPORT_TX_PIN);
 
     // Compass (pan feedback)
     if (!compass.begin()) {
@@ -92,19 +91,19 @@ void loop() {
         }
     }
 
-    // ── 2. Feed CRSF telemetry from ELRS backpack ────────────────────────────
-    crsfParser.update(planePos, linkStats);
+    // ── 2. Feed MAVLink telemetry from ELRS AirPort bridge ───────────────────
+    mavParser.update(planePos);
 
     // ── 3. Compute target angles and drive servos ─────────────────────────────
     if (homePos.valid && planePos.valid) {
-        uint32_t now      = millis();
-        bool homeGpsOk    = (gps.location.age() < GPS_TIMEOUT_MS);
-        bool crsfOk       = (now - planePos.lastUpdate < CRSF_TIMEOUT_MS);
+        uint32_t now        = millis();
+        bool homeGpsOk      = (gps.location.age() < GPS_TIMEOUT_MS);
+        bool mavlinkOk      = (now - planePos.lastUpdate < PLANE_TIMEOUT_MS);
 
-        webServer.status.homeGpsOk = homeGpsOk;
-        webServer.status.crsfOk    = crsfOk;
+        webServer.status.homeGpsOk  = homeGpsOk;
+        webServer.status.mavlinkOk  = mavlinkOk;
 
-        if (homeGpsOk && crsfOk) {
+        if (homeGpsOk && mavlinkOk) {
             double dist = haversineDistance(homePos.lat, homePos.lon,
                                             planePos.lat, planePos.lon);
 
@@ -147,7 +146,7 @@ void loop() {
             if (millis() - lastWarn >= 2000u) {
                 lastWarn = millis();
                 if (!homeGpsOk)  Serial.println("[WARN]  Home GPS timeout – servos stopped.");
-                if (!crsfOk)     Serial.println("[WARN]  ELRS/CRSF timeout – servos stopped.");
+                if (!mavlinkOk)  Serial.println("[WARN]  MAVLink timeout – servos stopped.");
             }
         }
 
@@ -174,12 +173,6 @@ void loop() {
     webServer.status.planeAlt     = planePos.alt;
     webServer.status.planeSpeed   = planePos.speedKmh;
     webServer.status.planeHeading = planePos.headingDeg;
-    webServer.status.linkRSSI     = linkStats.uplinkRSSI;
-    webServer.status.linkLQ       = linkStats.uplinkLQ;
-    webServer.status.linkSNR      = linkStats.uplinkSNR;
-    webServer.status.linkTxPwr    = linkStats.txPowerIdx;
-    webServer.status.linkRfMode   = linkStats.rfMode;
-    webServer.status.linkValid    = linkStats.valid;
     webServer.status.panAngle   = compass.getHeading();
     webServer.status.tiltAngle  = tracker.getTiltAngle();
 

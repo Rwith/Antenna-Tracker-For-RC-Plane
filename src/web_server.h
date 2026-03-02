@@ -15,7 +15,7 @@ struct TrackerStatus {
     float   homeAlt   = 0.0f;
     uint8_t homeSats  = 0;
 
-    // Plane GPS (ELRS/CRSF)
+    // Plane GPS (ELRS AirPort / MAVLink)
     bool   planeValid = false;
     double planeLat   = 0.0;
     double planeLon   = 0.0;
@@ -28,20 +28,12 @@ struct TrackerStatus {
     float distM     = 0.0f;   // horizontal distance to plane (m)
     float panAngle     = 0.0f;   // current compass heading (degrees)
     float tiltAngle    = 0.0f;   // current tilt from PWM (degrees)
-    float planeSpeed   = 0.0f;   // groundspeed km/h (from CRSF)
-    float planeHeading = 0.0f;   // true heading deg (from CRSF)
+    float planeSpeed   = 0.0f;   // groundspeed km/h (from MAVLink)
+    float planeHeading = 0.0f;   // true heading deg (from MAVLink)
 
     // Signal health
-    bool homeGpsOk = false;
-    bool crsfOk    = false;
-
-    // RF link stats (CRSF 0x14)
-    int8_t  linkRSSI    = 0;
-    uint8_t linkLQ      = 0;
-    int8_t  linkSNR     = 0;
-    uint8_t linkTxPwr   = 0;   // TX power index
-    uint8_t linkRfMode  = 0;
-    bool    linkValid   = false;
+    bool homeGpsOk  = false;
+    bool mavlinkOk  = false;
 
     // Flight statistics (accumulated in main.cpp)
     float    maxSpeedKmh = 0.0f;
@@ -132,7 +124,7 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
     <div class="row"><span class="lbl">Distance</span>  <span class="val" id="tDist">--</span></div>
     <div class="row"><span class="lbl">Alt diff</span>  <span class="val" id="tAltD">--</span></div>
     <div class="row"><span class="lbl">Home GPS</span>  <span class="val" id="tHGps">--</span></div>
-    <div class="row"><span class="lbl">CRSF link</span> <span class="val" id="tCrsf">--</span></div>
+    <div class="row"><span class="lbl">MAVLink</span>   <span class="val" id="tCrsf">--</span></div>
     <div class="row">
       <span class="lbl">Min track dist</span>
       <span style="display:flex;align-items:center;gap:4px">
@@ -154,30 +146,13 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
   </div>
 
   <div class="card">
-    <div class="ct">Plane GPS (ELRS)</div>
+    <div class="ct">Plane GPS (MAVLink)</div>
     <div class="row"><span class="lbl">Fix</span>       <span class="val" id="pFix">--</span></div>
     <div class="row"><span class="lbl">Latitude</span>  <span class="val" id="pLat">--</span></div>
     <div class="row"><span class="lbl">Longitude</span> <span class="val" id="pLon">--</span></div>
     <div class="row"><span class="lbl">Altitude</span>  <span class="val" id="pAlt">--</span></div>
     <div class="row"><span class="lbl">Speed</span>     <span class="val info" id="pSpd">--</span></div>
     <div class="row"><span class="lbl">Heading</span>   <span class="val" id="pHdg">--</span></div>
-  </div>
-
-  <div class="card">
-    <div class="ct">RF Link (ELRS)</div>
-    <div class="row">
-      <span class="lbl">Link quality</span>
-      <span style="display:flex;align-items:center;gap:6px">
-        <div style="width:55px;height:5px;border-radius:3px;background:#2a2d3a;overflow:hidden">
-          <div id="rLQfill" style="height:100%;width:0%;border-radius:3px;background:var(--green);transition:width .5s,background .5s"></div>
-        </div>
-        <span class="val" id="rLQ">--</span>
-      </span>
-    </div>
-    <div class="row"><span class="lbl">RSSI</span>     <span class="val" id="rRSSI">--</span></div>
-    <div class="row"><span class="lbl">SNR</span>      <span class="val" id="rSNR">--</span></div>
-    <div class="row"><span class="lbl">TX power</span> <span class="val" id="rPwr">--</span></div>
-    <div class="row"><span class="lbl">RF mode</span>  <span class="val" id="rMode">--</span></div>
   </div>
 
   <div class="card">
@@ -219,7 +194,6 @@ h1{font-size:19px;font-weight:bold;letter-spacing:.03em}
 const deg=v=>v.toFixed(1)+'&#xB0;';
 const mt =v=>v.toFixed(0)+' m';
 const ind=(v,t,f)=>`<span class="${v?'ok':'warn'}"><span class="dot"></span>${v?t:f}</span>`;
-const TX_PWR=['Off','10 mW','25 mW','100 mW','500 mW','1 W','2 W','250 mW','50 mW'];
 function fmtT(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60),h=Math.floor(m/60);
   return h?h+':'+String(m%60).padStart(2,'0')+':'+String(s%60).padStart(2,'0')
           :m+':'+String(s%60).padStart(2,'0');}
@@ -326,17 +300,6 @@ async function poll(){
     document.getElementById('pSpd').textContent=d.planeSpeed.toFixed(1)+' km/h';
     document.getElementById('pHdg').textContent=deg(d.planeHeading);
     if(!cfgLoaded){document.getElementById('cfgMin').value=d.minTrackDist.toFixed(0);cfgLoaded=true;}
-    // ── RF Link ───────────────────────────────────────────────────────────────
-    if(d.linkValid){
-      const lq=d.linkLQ;
-      document.getElementById('rLQ').textContent=lq+'%';
-      document.getElementById('rLQfill').style.width=lq+'%';
-      document.getElementById('rLQfill').style.background=lq>=70?'var(--green)':lq>=40?'#facc15':'var(--red)';
-      document.getElementById('rRSSI').textContent=d.linkRSSI+' dBm';
-      document.getElementById('rSNR').textContent=d.linkSNR+' dB';
-      document.getElementById('rPwr').textContent=TX_PWR[d.linkTxPwr]||'?';
-      document.getElementById('rMode').textContent='Mode '+d.linkRfMode;
-    }
     // ── Flight stats ──────────────────────────────────────────────────────────
     document.getElementById('fsTime').textContent=fmtT(d.flightMs);
     document.getElementById('fsSpd' ).textContent=d.maxSpeed.toFixed(1)+' km/h';
@@ -421,7 +384,7 @@ private:
     }
 
     void _handleData() {
-        char buf[768];
+        char buf[640];
         snprintf(buf, sizeof(buf),
             "{\"homeValid\":%s,\"homeLat\":%.7f,\"homeLon\":%.7f,"
             "\"homeAlt\":%.1f,\"homeSats\":%u,"
@@ -432,28 +395,20 @@ private:
             "\"panAngle\":%.1f,\"tiltAngle\":%.1f,"
             "\"homeGpsOk\":%s,\"crsfOk\":%s,"
             "\"minTrackDist\":%.1f,"
-            "\"linkRSSI\":%d,\"linkLQ\":%u,\"linkSNR\":%d,"
-            "\"linkTxPwr\":%u,\"linkRfMode\":%u,\"linkValid\":%s,"
             "\"maxSpeed\":%.1f,\"maxAlt\":%.1f,\"maxRelAlt\":%.1f,"
             "\"maxDist\":%.0f,\"flightMs\":%lu}",
-            status.homeValid  ? "true" : "false",
+            status.homeValid   ? "true" : "false",
             status.homeLat, status.homeLon, status.homeAlt,
             static_cast<unsigned>(status.homeSats),
-            status.planeValid ? "true" : "false",
+            status.planeValid  ? "true" : "false",
             status.planeLat, status.planeLon, status.planeAlt,
             status.planeSpeed, status.planeHeading,
-            status.tracking   ? "true" : "false",
+            status.tracking    ? "true" : "false",
             status.bearing, status.elevation, status.distM,
             status.panAngle, status.tiltAngle,
-            status.homeGpsOk  ? "true" : "false",
-            status.crsfOk     ? "true" : "false",
+            status.homeGpsOk   ? "true" : "false",
+            status.mavlinkOk   ? "true" : "false",
             minTrackDist,
-            static_cast<int>(status.linkRSSI),
-            static_cast<unsigned>(status.linkLQ),
-            static_cast<int>(status.linkSNR),
-            static_cast<unsigned>(status.linkTxPwr),
-            static_cast<unsigned>(status.linkRfMode),
-            status.linkValid  ? "true" : "false",
             status.maxSpeedKmh, status.maxAltM, status.maxRelAltM,
             status.maxDistM, static_cast<unsigned long>(status.flightMs)
         );

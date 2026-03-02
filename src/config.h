@@ -7,12 +7,14 @@
 #define GPS_TX_PIN   43    // ESP32 GPIO43 (board TX pin) → NEO-6M RX  (optional if read-only)
 #define GPS_BAUD     115200
 
-// BetaFPV ELRS 868/915 MHz Micro TX V2 – CRSF protocol (UART2)
-// This module has a SINGLE "CRSF Serial Port" pin (half-duplex).
-// Wire that pin → ESP32 GPIO18 (RX only).  No TX wire is needed for telemetry.
-// Power the module via its XT30 plug (7–13 V LiPo) – not from ESP32 pins.
-#define CRSF_RX_PIN  16    // ESP32-S3 GPIO16 ← ELRS "CRSF Serial Port" pin
-#define CRSF_BAUD    420000  // CRSF standard baud rate – do not change
+// BetaFPV ELRS 868/915 MHz Micro TX V2 – AirPort mode (transparent serial bridge)
+// Enable "Use as AirPort Serial device" in the ELRS web UI and set baud to 460800.
+// Wire the ELRS CRSF/Serial pin → ESP32 GPIO16 (RX) and GPIO17 (TX).
+// The module must also be bound to the plane's ELRS receiver.
+// Power via the module's own supply (XT30 or USB-C) – not from ESP32 pins.
+#define AIRPORT_RX_PIN  16    // ESP32-S3 GPIO16 ← ELRS Serial pin
+#define AIRPORT_TX_PIN  17    // ESP32-S3 GPIO17 → ELRS Serial pin
+#define AIRPORT_BAUD    460800  // AirPort UART baud – must match ELRS web UI
 
 // ─── Servo Signal Pins ────────────────────────────────────────────────────────
 
@@ -63,7 +65,7 @@
 // ─── Safety Timeouts ─────────────────────────────────────────────────────────
 
 #define GPS_TIMEOUT_MS         5000   // stop if home GPS data is older than this
-#define CRSF_TIMEOUT_MS        3000   // stop if plane GPS data is older than this
+#define PLANE_TIMEOUT_MS       3000   // stop if plane MAVLink data is older than this
 #define MIN_PLANE_DISTANCE_M   5.0f   // ignore plane if closer than this (m)
                                       // prevents wild spinning when on the ground
 
