@@ -124,7 +124,7 @@ Quick summary:
 | 16 (RX1) | NEO-6M TX |
 | 17 (TX1) | NEO-6M RX |
 | 18 (RX2) | ELRS backpack TX (CRSF) |
-| 19 (TX2) | ELRS backpack RX (optional) |
+| 21 (TX2) | ELRS backpack RX (optional) |
 | 8 (SDA) | QMC5883L SDA |
 | 9 (SCL) | QMC5883L SCL |
 | 40 | Pan servo signal (360°) |

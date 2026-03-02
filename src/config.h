@@ -10,7 +10,7 @@
 // BetaFPV ELRS 915 MHz backpack – CRSF protocol (UART2)
 // Connect ELRS TX module's TX pin → ESP32 RX pin (non-inverted, 3.3 V logic)
 #define CRSF_RX_PIN  18    // ESP32 GPIO18 ← ELRS backpack TX
-#define CRSF_TX_PIN  19    // ESP32 GPIO19 → ELRS backpack RX  (optional)
+#define CRSF_TX_PIN  21    // ESP32-S3 GPIO21 → ELRS backpack RX  (optional; GPIO19=USB_D- on S3, avoid)
 #define CRSF_BAUD    420000  // CRSF standard baud rate – do not change
 
 // ─── Servo Signal Pins ────────────────────────────────────────────────────────

@@ -77,7 +77,7 @@ Wire everything according to the table below. All pin numbers can be changed in 
 | ELRS Backpack | ESP32 GPIO | Notes |
 |--------------|-----------|-------|
 | TX | **GPIO 18** | CRSF telemetry into ESP32 |
-| RX | GPIO 19 | Optional |
+| RX | GPIO 21 | Optional (GPIO 19 = USB_D- on S3, do not use) |
 | VCC | 3.3 V or 5 V | Check your module's rating |
 | GND | GND | |
 
@@ -111,7 +111,7 @@ NEO-6M GPS ─TX────▶│GPIO16  GPIO8───SDA──┐            
            ──GND───│GND                               │
                     │                                  │
 ELRS Backpack─TX──▶│GPIO18                            │
-             ◀RX───│GPIO19                            │
+             ◀RX───│GPIO21                            │
              ─VCC──│3.3V/5V                           │
              ─GND──│GND                               │
                     │                                  │
