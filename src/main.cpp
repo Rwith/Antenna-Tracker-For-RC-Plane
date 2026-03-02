@@ -54,11 +54,10 @@ void setup() {
 
     // Compass (pan feedback)
     if (!compass.begin()) {
-        Serial.println("[ERROR] QMC5883L not found – check I2C wiring (SDA/SCL) and VCC.");
-        Serial.flush();
-        while (true) delay(1000);
+        Serial.println("[WARN]  QMC5883L not found – compass disabled (tracking unavailable).");
+    } else {
+        Serial.println("[OK]    QMC5883L compass ready.");
     }
-    Serial.println("[OK]    QMC5883L compass ready.");
 
     // Servos
     tracker.begin();
