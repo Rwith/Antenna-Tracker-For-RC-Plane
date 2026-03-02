@@ -127,8 +127,8 @@ Quick summary:
 | 19 (TX2) | ELRS backpack RX (optional) |
 | 8 (SDA) | QMC5883L SDA |
 | 9 (SCL) | QMC5883L SCL |
-| 25 | Pan servo signal (360°) |
-| 26 | Tilt servo signal (180°) |
+| 40 | Pan servo signal (360°) |
+| 41 | Tilt servo signal (180°) |
 
 ---
 

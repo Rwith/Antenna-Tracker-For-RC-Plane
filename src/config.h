@@ -15,8 +15,8 @@
 
 // ─── Servo Signal Pins ────────────────────────────────────────────────────────
 
-#define PAN_SERVO_PIN   25   // Azimuth (left/right) servo signal
-#define TILT_SERVO_PIN  26   // Elevation (up/down) servo signal
+#define PAN_SERVO_PIN   40   // Azimuth (left/right) servo signal
+#define TILT_SERVO_PIN  41   // Elevation (up/down) servo signal
 
 // ─── 360° Continuous Servo PWM Calibration (microseconds) ────────────────────
 // 360° servos respond to SPEED, not position:

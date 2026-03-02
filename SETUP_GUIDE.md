@@ -94,8 +94,8 @@ Wire everything according to the table below. All pin numbers can be changed in 
 
 | Servo | Signal pin | Power |
 |-------|-----------|-------|
-| Pan (360°) | **GPIO 25** | External 5–6 V supply |
-| Tilt (180°) | **GPIO 26** | External 5–6 V supply |
+| Pan (360°) | **GPIO 40** | External 5–6 V supply |
+| Tilt (180°) | **GPIO 41** | External 5–6 V supply |
 
 > **Important:** Connect servo GND to ESP32 GND to share a common ground. Never power servos from the ESP32 pins — current spikes will crash or damage it.
 
@@ -115,8 +115,8 @@ ELRS Backpack─TX──▶│GPIO18                            │
              ─VCC──│3.3V/5V                           │
              ─GND──│GND                               │
                     │                                  │
-Pan Servo ─signal──│GPIO25  (360° continuous)         │
-Tilt Servo─signal──│GPIO26  (180° positional)         │
+Pan Servo ─signal──│GPIO40  (360° continuous)         │
+Tilt Servo─signal──│GPIO41  (180° positional)         │
                     └──────────────────────────────────┘
 
 Servo VCC/GND → external 5–6 V BEC (GND shared with ESP32)
