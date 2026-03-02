@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // CRSF (Crossfire Serial Protocol) parser for ExpressLRS (ELRS) modules
 //
-// Used with: BetaFPV ELRS 915 MHz backpack (and any ELRS TX module)
+// Used with: BetaFPV ELRS 868/915 MHz Micro TX V2 (and any ELRS TX module)
 //
 // CRSF frame structure:
 //   [ADDR][LEN][TYPE][PAYLOAD...][CRC8]

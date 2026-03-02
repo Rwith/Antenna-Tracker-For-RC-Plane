@@ -12,7 +12,7 @@
 
 // ─── Hardware serial ports ────────────────────────────────────────────────────
 HardwareSerial gpsSerial(1);   // UART1 → NEO-6M GPS
-HardwareSerial elrsSerial(2);  // UART2 → BetaFPV ELRS 915 MHz backpack (CRSF)
+HardwareSerial elrsSerial(2);  // UART2 → BetaFPV ELRS 868 MHz Micro TX V2 (CRSF)
 
 // ─── Component instances ──────────────────────────────────────────────────────
 TinyGPSPlus     gps;
@@ -48,8 +48,8 @@ void setup() {
     // NEO-6M GPS
     gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
 
-    // BetaFPV ELRS 915 MHz backpack – CRSF at 420000 baud
-    elrsSerial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_RX_PIN, CRSF_TX_PIN);
+    // BetaFPV ELRS 868 MHz Micro TX V2 – single CRSF pin, RX only
+    elrsSerial.begin(CRSF_BAUD, SERIAL_8N1, CRSF_RX_PIN, -1);
 
     // Compass (pan feedback)
     if (!compass.begin()) {

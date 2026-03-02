@@ -10,7 +10,7 @@ This guide walks you through building, wiring, flashing, and calibrating the ant
 |---|-----------|-------|
 | 1 | ESP32 DevKit v1 (38-pin) | Any clone works |
 | 2 | NEO-6M GPS module | With ceramic antenna |
-| 3 | BetaFPV ELRS 915 MHz TX backpack | Attaches to your radio transmitter |
+| 3 | BetaFPV ELRS 868/915 MHz TX backpack | Attaches to your radio transmitter |
 | 4 | QMC5883L magnetometer breakout | I2C compass for pan feedback |
 | 5 | 360° continuous-rotation servo | Pan (left/right) axis |
 | 6 | 180° standard servo | Tilt (up/down) axis |
@@ -72,14 +72,14 @@ Wire everything according to the table below. All pin numbers can be changed in 
 | VCC | 3.3 V | |
 | GND | GND | |
 
-### BetaFPV ELRS Backpack → ESP32 (UART2)
+### BetaFPV ELRS 868/915 MHz Micro TX V2 → ESP32 (UART2)
 
-| ELRS Backpack | ESP32 GPIO | Notes |
-|--------------|-----------|-------|
-| TX | **GPIO 18** | CRSF telemetry into ESP32 |
-| RX | GPIO 21 | Optional (GPIO 19 = USB_D- on S3, do not use) |
-| VCC | 3.3 V or 5 V | Check your module's rating |
-| GND | GND | |
+| ELRS module pin | ESP32 GPIO | Notes |
+|----------------|-----------|-------|
+| CRSF Serial Port | **GPIO 18** | Single half-duplex pin – one wire only |
+| GND | GND | Shared ground |
+
+> **Power:** Feed the module via its **XT30 plug** from a 2S–3S LiPo (7–13 V). Do **not** connect its power pin to the ESP32 3.3 V or 5 V pins.
 
 ### QMC5883L Compass → ESP32-S3 (I2C)
 
@@ -110,10 +110,9 @@ NEO-6M GPS ─TX────▶│GPIO16  GPIO8───SDA──┐            
            ──VCC───│3.3V               QMC5883L        │
            ──GND───│GND                               │
                     │                                  │
-ELRS Backpack─TX──▶│GPIO18                            │
-             ◀RX───│GPIO21                            │
-             ─VCC──│3.3V/5V                           │
-             ─GND──│GND                               │
+ELRS TX─CRSF──────▶│GPIO18  (single wire, half-duplex) │
+        GND────────│GND                               │
+        (power via XT30 ─ external LiPo, not ESP32)  │
                     │                                  │
 Pan Servo ─signal──│GPIO40  (360° continuous)         │
 Tilt Servo─signal──│GPIO41  (180° positional)         │

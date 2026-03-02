@@ -7,10 +7,11 @@
 #define GPS_TX_PIN   17    // ESP32 GPIO17 → NEO-6M RX  (optional if read-only)
 #define GPS_BAUD     9600
 
-// BetaFPV ELRS 915 MHz backpack – CRSF protocol (UART2)
-// Connect ELRS TX module's TX pin → ESP32 RX pin (non-inverted, 3.3 V logic)
-#define CRSF_RX_PIN  18    // ESP32 GPIO18 ← ELRS backpack TX
-#define CRSF_TX_PIN  21    // ESP32-S3 GPIO21 → ELRS backpack RX  (optional; GPIO19=USB_D- on S3, avoid)
+// BetaFPV ELRS 868/915 MHz Micro TX V2 – CRSF protocol (UART2)
+// This module has a SINGLE "CRSF Serial Port" pin (half-duplex).
+// Wire that pin → ESP32 GPIO18 (RX only).  No TX wire is needed for telemetry.
+// Power the module via its XT30 plug (7–13 V LiPo) – not from ESP32 pins.
+#define CRSF_RX_PIN  18    // ESP32-S3 GPIO18 ← ELRS "CRSF Serial Port" pin
 #define CRSF_BAUD    420000  // CRSF standard baud rate – do not change
 
 // ─── Servo Signal Pins ────────────────────────────────────────────────────────
