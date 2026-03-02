@@ -71,8 +71,8 @@
 // The ESP32 hosts a live status page at http://<ip>/ once connected.
 // Set WIFI_SSID / WIFI_PASSWORD to your network credentials.
 // If the connection fails the tracker still operates normally.
-#define WIFI_SSID        "your-network-name"
-#define WIFI_PASSWORD    "your-password"
+#define WIFI_SSID        "WithersNet_2G"
+#define WIFI_PASSWORD    "hookmeup"
 #define WIFI_TIMEOUT_MS  15000   // ms to wait for association before giving up
 
 // ─── Compass (QMC5883L) Calibration ─────────────────────────────────────────
